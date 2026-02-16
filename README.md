@@ -4,6 +4,16 @@ Analysis of New York housing prices, turnover, and other statistics based on dat
 #test
 #change
 #t
+
+# One tab with NYC data 
+# One tab with Wechester Data 
+# One tab with Nassau County Data 
+# Historical 
+#Predictive
+#
+
+
+
 print"This is a project about New York Housing"
 =======
 Ideas:
