@@ -10,7 +10,20 @@ Analysis of New York housing prices, turnover, and other statistics based on dat
 # One tab with Nassau County Data 
 # Historical 
 #Predictive
-#
+
+
+
+
+##Line graph comparing median price of housing of different locations from 2012-Present
+##Monthly/yearly price data based on growth
+##Volume
+##new listings
+##Sale-to-List
+## Predictive model for upcoming years, different areas within each
+##Map of NYC with area hover feature
+##Heat map
+##Region explorer
+##Home navigation features
 
 
 
