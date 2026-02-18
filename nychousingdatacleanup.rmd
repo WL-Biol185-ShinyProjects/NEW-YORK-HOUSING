@@ -1,0 +1,10 @@
+
+```{r}
+nychousing <- read.csv("nychousing.csv")
+nychousing$Region <- c(rep("Nassau County,NY", times = 168),
+               rep("Nassau County, NY metro area", times = 168),
+               rep("New York, NY", times = 128),
+               rep("New York, NY metro area", times = 128),
+               rep("Westchester County, NY", times = 128),
+               recursive =TRUE) 
+```
