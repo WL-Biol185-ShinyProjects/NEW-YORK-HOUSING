@@ -16,7 +16,7 @@ library(bslib)
 ui <- page_navbar( 
   nav_panel("Market Overview", "line graphs, average household pricing (monthly and yearly), "), 
   nav_panel("Region Overview", "Page B content"), 
-  nav_panel("C", "Page C content"), 
+  nav_panel("Map", "Page C content"), 
   nav_panel("Prediction Model", "Page C content"),
   title = "New York Housing Analysis", 
   id = "page", 
