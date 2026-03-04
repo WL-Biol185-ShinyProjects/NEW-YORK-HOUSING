@@ -8,3 +8,9 @@ nychousing$Region <- c(rep("Nassau County,NY", times = 168),
                rep("Westchester County, NY", times = 128),
                recursive =TRUE) 
 ```
+
+
+
+``` {r}
+write.csv(nychousing, "nychousing.csv")
+```
