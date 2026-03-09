@@ -1,5 +1,6 @@
 library(shiny)
 library(bslib)
+library(bsicons)
 library(dplyr)
 library(lubridate)
 library(ggplot2)
