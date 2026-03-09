@@ -1,46 +1,44 @@
 server <- function(input, output) {
   
-  # --- Filtered data for Market Overview ---
+  # --- Filtered and cleaned data ---
   market_df <- reactive({
-    df <- nychousing %>% 
-      filter(!is.na(Median.Sale.Price)) %>%
+    df <- nychousing %>%
       mutate(
         Median.Sale.Price = as.numeric(gsub("\\$|K", "", Median.Sale.Price)) * 1000,
         date      = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
         year_num  = year(date),
-        month_num = month(date)
-      )
+        month_num = month(date),
+        # --- Combine regions into three groups ---
+        Region.Group = case_when(
+          Region %in% c("Nassau County,NY", "Nassau County, NY metro area") ~ "Nassau County",
+          Region %in% c("New York, NY", "New York, NY metro area")          ~ "New York City",
+          Region == "Westchester County, NY"                                 ~ "Westchester",
+          TRUE ~ "Other"
+        )
+      ) %>%
+      filter(!is.na(Median.Sale.Price))
     
-    if (input$market_region == "Nassau County") {
-      df <- df %>% filter(Region %in% c("Nassau County,NY", "Nassau County, NY metro area"))
-    } else if (input$market_region == "New York City") {
-      df <- df %>% filter(Region %in% c("New York, NY", "New York, NY metro area"))
-    } else if (input$market_region == "Westchester County") {
-      df <- df %>% filter(Region == "Westchester County, NY")
+    if (input$market_region != "All Regions") {
+      df <- df %>% filter(Region.Group == input$market_region)
     }
     
     df %>% filter(year_num >= input$market_years[1] & year_num <= input$market_years[2])
   })
   
-  # --- Determine which column to plot based on metric + change toggle ---
+  # --- Determine which column to plot ---
   plot_col <- reactive({
-    if (input$market_change == "actual") {
-      input$market_metric
-    } else {
-      paste0(input$market_metric, ".", input$market_change)
+    metric <- input$market_metric
+    change <- input$market_change
+    
+    # Inventory has no actual value — force MoM if actual selected
+    if (metric == "Inventory" && change == "actual") {
+      return("Inventory.MoM")
     }
+    
+    if (change == "actual") metric else paste0(metric, ".", change)
   })
   
-  # --- Clean the selected column to numeric ---
-  clean_col <- reactive({
-    col  <- plot_col()
-    df   <- market_df()
-    vals <- df[[col]]
-    # Strip % signs if present
-    as.numeric(gsub("%", "", vals))
-  })
-  
-  # --- Most recent month for summary cards ---
+  # --- Latest month summary ---
   latest <- reactive({
     df  <- market_df()
     col <- input$market_metric
@@ -49,24 +47,32 @@ server <- function(input, output) {
     yoy_col <- paste0(col, ".YoY")
     
     df %>%
-      filter(date == max(date)) %>%
+      group_by(date) %>%
       summarise(
-        val = mean(as.numeric(gsub("%", "", .data[[col]])),     na.rm = TRUE),
-        mom = mean(as.numeric(gsub("%", "", .data[[mom_col]])), na.rm = TRUE),
-        yoy = mean(as.numeric(gsub("%", "", .data[[yoy_col]])), na.rm = TRUE)
-      )
+        val = mean(as.numeric(gsub("[%$K]", "", .data[[col]])),     na.rm = TRUE),
+        mom = mean(as.numeric(gsub("%",     "", .data[[mom_col]])), na.rm = TRUE),
+        yoy = mean(as.numeric(gsub("%",     "", .data[[yoy_col]])), na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      filter(date == max(date))
   })
+  
+  # --- Format helper ---
+  format_val <- function(val, metric) {
+    if (metric == "Median.Sale.Price") {
+      paste0("$", formatC(val / 1000, format = "f", digits = 0), "K")
+    } else if (metric %in% c("Average.Sale.To.List", "Inventory")) {
+      paste0(round(val, 1), "%")
+    } else {
+      formatC(round(val, 0), format = "d", big.mark = ",")
+    }
+  }
   
   # --- Summary Cards ---
   output$card_price <- renderText({
-    val <- latest()$val
-    if (input$market_metric == "Median.Sale.Price") {
-      paste0("$", formatC(val / 1000, format = "f", digits = 0), "K")
-    } else if (input$market_metric == "Average.Sale.To.List") {
-      paste0(round(val, 1), "%")
-    } else {
-      formatC(val, format = "d", big.mark = ",")
-    }
+    metric <- input$market_metric
+    if (metric == "Inventory") return("See MoM/YoY")
+    format_val(latest()$val, metric)
   })
   
   output$card_mom <- renderText({
@@ -80,29 +86,21 @@ server <- function(input, output) {
   })
   
   output$card_high <- renderText({
-    df  <- market_df()
-    col <- input$market_metric
-    vals <- as.numeric(gsub("%", "", df[[col]]))
-    high <- df[which.max(vals), ]
-    val  <- max(vals, na.rm = TRUE)
-    if (input$market_metric == "Median.Sale.Price") {
-      paste0("$", formatC(val / 1000, format = "f", digits = 0), "K — ", format(high$date, "%b %Y"))
-    } else {
-      paste0(formatC(val, format = "f", digits = 1), " — ", format(high$date, "%b %Y"))
-    }
+    metric <- input$market_metric
+    if (metric == "Inventory") return("N/A")
+    df   <- market_df()
+    vals <- as.numeric(gsub("[%$K]", "", df[[metric]]))
+    idx  <- which.max(vals)
+    paste0(format_val(vals[idx], metric), " — ", format(df$date[idx], "%b %Y"))
   })
   
   output$card_low <- renderText({
-    df  <- market_df()
-    col <- input$market_metric
-    vals <- as.numeric(gsub("%", "", df[[col]]))
-    low  <- df[which.min(vals), ]
-    val  <- min(vals, na.rm = TRUE)
-    if (input$market_metric == "Median.Sale.Price") {
-      paste0("$", formatC(val / 1000, format = "f", digits = 0), "K — ", format(low$date, "%b %Y"))
-    } else {
-      paste0(formatC(val, format = "f", digits = 1), " — ", format(low$date, "%b %Y"))
-    }
+    metric <- input$market_metric
+    if (metric == "Inventory") return("N/A")
+    df   <- market_df()
+    vals <- as.numeric(gsub("[%$K]", "", df[[metric]]))
+    idx  <- which.min(vals)
+    paste0(format_val(vals[idx], metric), " — ", format(df$date[idx], "%b %Y"))
   })
   
   # --- Market Overview Chart ---
@@ -110,18 +108,24 @@ server <- function(input, output) {
     df  <- market_df()
     col <- plot_col()
     
+    # Warn user if inventory actual was forced to MoM
+    col_label <- if (input$market_metric == "Inventory" && input$market_change == "actual") {
+      "Inventory MoM (%) — no absolute value available"
+    } else {
+      col
+    }
+    
     df <- df %>%
       mutate(plot_val = as.numeric(gsub("%", "", .data[[col]]))) %>%
       filter(!is.na(plot_val)) %>%
-      group_by(date, Region) %>%
+      group_by(date, Region.Group) %>%
       summarise(plot_val = mean(plot_val, na.rm = TRUE), .groups = "drop")
     
-    # Y axis label
     y_label <- names(which(c(
       "Median Sale Price"      = "Median.Sale.Price",
       "Homes Sold"             = "Homes.Sold",
       "New Listings"           = "New.Listings",
-      "Inventory"              = "Inventory",
+      "Inventory (MoM/YoY)"   = "Inventory",
       "Days on Market"         = "Days.on.Market",
       "Avg Sale to List Ratio" = "Average.Sale.To.List"
     ) == input$market_metric))
@@ -130,19 +134,16 @@ server <- function(input, output) {
     if (input$market_change == "YoY") y_label <- paste(y_label, "YoY (%)")
     
     region_colors <- c(
-      "Nassau County,NY"             = "#E63946",
-      "Nassau County, NY metro area" = "#f4a261",
-      "New York, NY"                 = "#457B9D",
-      "New York, NY metro area"      = "#a8dadc",
-      "Westchester County, NY"       = "#2A9D8F"
+      "Nassau County"  = "#E63946",
+      "New York City"  = "#457B9D",
+      "Westchester"    = "#2A9D8F"
     )
     
-    # High point annotation (only for actual value view)
     high_point <- df %>%
       filter(plot_val == max(plot_val, na.rm = TRUE)) %>%
       slice(1)
     
-    p <- ggplot(df, aes(x = date, y = plot_val, color = Region, fill = Region))
+    p <- ggplot(df, aes(x = date, y = plot_val, color = Region.Group, fill = Region.Group))
     
     if (input$market_chart == "line") {
       p <- p +
@@ -156,12 +157,10 @@ server <- function(input, output) {
                    nudge_y = max(df$plot_val, na.rm = TRUE) * 0.03,
                    size = 3.5, color = "red", inherit.aes = FALSE)
     } else {
-      p <- p +
-        geom_col(position = "dodge", alpha = 0.85)
+      p <- p + geom_col(position = "dodge", alpha = 0.85)
     }
     
-    # Add COVID line for actual value view
-    if (input$market_change == "actual") {
+    if (input$market_change == "actual" && input$market_metric != "Inventory") {
       p <- p +
         geom_vline(xintercept = as.Date("2020-03-01"),
                    linetype = "dashed", color = "gray40") +
@@ -170,7 +169,6 @@ server <- function(input, output) {
                  size = 3, color = "gray40")
     }
     
-    # Add zero line for MoM/YoY views
     if (input$market_change %in% c("MoM", "YoY")) {
       p <- p + geom_hline(yintercept = 0, linetype = "dashed", color = "gray40")
     }

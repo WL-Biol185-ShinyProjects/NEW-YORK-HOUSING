@@ -68,23 +68,23 @@ ui <- page_navbar(
                 ),
                 
                 sliderInput("market_years", "Year Range:",
-                            min = 2012, max = 2024, value = c(2012, 2024), sep = ""
+                            min = 2012, max = 2025, value = c(2012, 2025), sep = ""
                 ),
                 
                 selectInput("market_metric", "Select Metric:",
                             choices = c(
-                              "Median Sale Price"        = "Median.Sale.Price",
-                              "Homes Sold"               = "Homes.Sold",
-                              "New Listings"             = "New.Listings",
-                              "Inventory"                = "Inventory",
-                              "Days on Market"           = "Days.on.Market",
-                              "Avg Sale to List Ratio"   = "Average.Sale.To.List"
+                              "Median Sale Price"      = "Median.Sale.Price",
+                              "Homes Sold"             = "Homes.Sold",
+                              "New Listings"           = "New.Listings",
+                              "Inventory (MoM/YoY)"   = "Inventory",
+                              "Days on Market"         = "Days.on.Market",
+                              "Avg Sale to List Ratio" = "Average.Sale.To.List"
                             )
                 ),
                 
                 selectInput("market_change", "View Change As:",
                             choices = c(
-                              "Actual Value" = "actual",
+                              "Actual Value"     = "actual",
                               "Month-over-Month" = "MoM",
                               "Year-over-Year"   = "YoY"
                             )
@@ -96,35 +96,35 @@ ui <- page_navbar(
                 ),
                 
                 hr(),
+                helpText("Inventory has no true absolute value — use MoM or YoY for inventory trends."),
                 helpText("Summary statistics reflect the most recent month in the selected range.")
               ),
               
-              # --- Summary Cards ---
               layout_columns(
                 value_box(
                   title = "Current Value",
                   value = textOutput("card_price"),
-                  theme = "primary"
+                  style = "background-color: #f4a0b5; color: white;"
                 ),
                 value_box(
                   title = "Month-over-Month",
                   value = textOutput("card_mom"),
-                  theme = "success"
+                  style = "background-color: #e87a9f; color: white;"
                 ),
                 value_box(
                   title = "Year-over-Year",
                   value = textOutput("card_yoy"),
-                  theme = "info"
+                  style = "background-color: #d45a85; color: white;"
                 ),
                 value_box(
                   title = "All-Time High",
                   value = textOutput("card_high"),
-                  theme = "warning"
+                  style = "background-color: #c0416e; color: white;"
                 ),
                 value_box(
                   title = "All-Time Low",
                   value = textOutput("card_low"),
-                  theme = "danger"
+                  style = "background-color: #a8265a; color: white;"
                 )
               ),
               
