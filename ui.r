@@ -1,24 +1,26 @@
----
-title: "ui.r"
-output: html_document
-date: "2026-02-16"
----
-
-  
-
 library(shiny)
-
-
-
+library(bslib)
 library(dplyr)
 library(lubridate)
+library(ggplot2)
+library(tidyverse)
+
+# --- Load Data ---
+nychousing <- read.csv("nychousing.csv")
+
+# --- Assign Regions ---
+nychousing$Region <- c(
+  rep("Nassau County,NY",             times = 168),
+  rep("Nassau County, NY metro area", times = 168),
+  rep("New York, NY",                 times = 128),
+  rep("New York, NY metro area",      times = 128),
+  rep("Westchester County, NY",       times = 128)
+)
 
 # --- Data Prep ---
 nychousing <- nychousing %>%
   mutate(
-    # Fix price: remove "$" and "K", convert to numeric (multiply by 1000)
     Median.Sale.Price = as.numeric(gsub("\\$|K", "", Median.Sale.Price)) * 1000,
-    
     date       = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
     time_index = year(date) * 12 + month(date),
     month_num  = month(date),
@@ -43,47 +45,84 @@ westchester_df <- nychousing %>%
   mutate(Region = droplevels(Region))
 
 # --- Build Models ---
-nassau_model <- lm(Median.Sale.Price ~ time_index + month_num + Region,
-                   data = nassau_df)
+nassau_model      <- lm(Median.Sale.Price ~ time_index + month_num + Region, data = nassau_df)
+nyc_model         <- lm(Median.Sale.Price ~ time_index + month_num + Region, data = nyc_df)
+westchester_model <- lm(Median.Sale.Price ~ time_index + month_num,          data = westchester_df)
 
-nyc_model <- lm(Median.Sale.Price ~ time_index + month_num + Region,
-                data = nyc_df)
-
-westchester_model <- lm(Median.Sale.Price ~ time_index + month_num,
-                        data = westchester_df)
-
-# --- Summaries ---
-summary(nassau_model)
-summary(nyc_model)
-summary(westchester_model)
-
-
-library(shiny)
-library(bslib)
-
-ui <- page_navbar( 
+# --- UI ---
+ui <- page_navbar(
+  title = "New York Housing Analysis",
+  id    = "page",
+  
   nav_panel("Home", "NYC metro area including data from NYC, Westchester, and Nassau County"),
-  nav_panel("Market Overview", "line graphs, average household pricing (monthly and yearly), "), 
-  nav_panel("Region Overview", "Page B content"), 
-  nav_panel("Map","Page C content"),
-  nav_panel("Prediction Model", 
+  
+  nav_panel("Market Overview",
             layout_sidebar(
-                   sidebar = sidebar(
-                    title = "Prediction Controls",
-                    selectInput("pred_region", "Select Region:",
-                      choices = c("Nassau County", "New York City", "Westchester County")
-                    ),
-                    numericInput("pred_year", "Forecast Through Year:",
-                                 value = 2027, min = 2012, max = 2035),
-                    hr(),
-                    helpText("The line graph shows actual prices and the model fitted and forecasted trend.")
-                  ),
-                  plotOutput("prediction_plot", height = "75vh")
-                ))
+              sidebar = sidebar(
+                title = "Market Controls",
+                selectInput("market_region", "Select Region:",
+                            choices = c("All Regions", "Nassau County", "New York City", "Westchester County")
+                ),
+                sliderInput("market_years", "Year Range:",
+                            min = 2012, max = 2024, value = c(2012, 2024), sep = ""
+                ),
+                hr(),
+                helpText("Summary statistics reflect the most recent month in the selected range.")
+              ),
+              # --- Summary Cards ---
+              layout_columns(
+                value_box(
+                  title   = "Current Median Price",
+                  value   = textOutput("card_price"),
+                  showcase = bsicons::bs_icon("house-fill"),
+                  theme   = "primary"
+                ),
+                value_box(
+                  title   = "Month-over-Month",
+                  value   = textOutput("card_mom"),
+                  showcase = bsicons::bs_icon("arrow-left-right"),
+                  theme   = "success"
+                ),
+                value_box(
+                  title   = "Year-over-Year",
+                  value   = textOutput("card_yoy"),
+                  showcase = bsicons::bs_icon("calendar"),
+                  theme   = "info"
+                ),
+                value_box(
+                  title   = "All-Time High",
+                  value   = textOutput("card_high"),
+                  showcase = bsicons::bs_icon("graph-up-arrow"),
+                  theme   = "warning"
+                ),
+                value_box(
+                  title   = "All-Time Low",
+                  value   = textOutput("card_low"),
+                  showcase = bsicons::bs_icon("graph-down-arrow"),
+                  theme   = "danger"
+                )
+              ),
+              # --- Line Chart ---
+              plotOutput("market_plot", height = "50vh")
+            )
+  ),
+  
+  nav_panel("Region Overview", "Page B content"),
+  nav_panel("Map", "Page C content"),
+  
+  nav_panel("Prediction Model",
+            layout_sidebar(
+              sidebar = sidebar(
+                title = "Prediction Controls",
+                selectInput("pred_region", "Select Region:",
+                            choices = c("Nassau County", "New York City", "Westchester County")
+                ),
+                numericInput("pred_year", "Forecast Through Year:",
+                             value = 2026, min = 2012, max = 2035),
+                hr(),
+                helpText("The line graph shows actual prices and the model fitted and forecasted trend.")
+              ),
+              plotOutput("prediction_plot", height = "75vh")
+            )
+  )
 )
-
-server <- function(input, output) {
-
-}
-
-shinyApp(ui = ui, server = server)
