@@ -17,7 +17,7 @@ nychousing$Region <- c(
   rep("Westchester County, NY",       times = 128)
 )
 
-# --- Split and build models (needs cleaned price for lm) ---
+# --- Clean data for models ---
 housing_clean <- nychousing %>%
   mutate(
     Median.Sale.Price = as.numeric(gsub("\\$|K|%|,", "", Median.Sale.Price)) * 1000,
@@ -28,6 +28,7 @@ housing_clean <- nychousing %>%
     Region     = as.factor(Region)
   )
 
+# --- Split into Three Regional Datasets ---
 nassau_df <- housing_clean %>%
   filter(Region %in% c("Nassau County,NY", "Nassau County, NY metro area")) %>%
   filter(!is.na(Median.Sale.Price)) %>%
@@ -43,6 +44,7 @@ westchester_df <- housing_clean %>%
   filter(!is.na(Median.Sale.Price)) %>%
   mutate(Region = droplevels(Region))
 
+# --- Build Models ---
 nassau_model      <- lm(Median.Sale.Price ~ time_index + month_num + Region, data = nassau_df)
 nyc_model         <- lm(Median.Sale.Price ~ time_index + month_num + Region, data = nyc_df)
 westchester_model <- lm(Median.Sale.Price ~ time_index + month_num,          data = westchester_df)
@@ -60,15 +62,12 @@ ui <- page_navbar(
             layout_sidebar(
               sidebar = sidebar(
                 title = "Market Controls",
-                
                 selectInput("market_region", "Select Region:",
                             choices = c("All Regions", "Nassau County", "New York City", "Westchester County")
                 ),
-                
                 sliderInput("market_years", "Year Range:",
-                            min = 2016, max = 2025, value = c(2016, 2025), sep = ""
+                            min = 2012, max = 2025, value = c(2012, 2025), sep = ""
                 ),
-                
                 selectInput("market_metric", "Select Metric:",
                             choices = c(
                               "Median Sale Price"      = "Median.Sale.Price",
@@ -79,7 +78,6 @@ ui <- page_navbar(
                               "Avg Sale to List Ratio" = "Average.Sale.To.List"
                             )
                 ),
-                
                 selectInput("market_change", "View Change As:",
                             choices = c(
                               "Actual Value"     = "actual",
@@ -87,14 +85,12 @@ ui <- page_navbar(
                               "Year-over-Year"   = "YoY"
                             )
                 ),
-                
                 radioButtons("market_chart", "Chart Type:",
                              choices  = c("Line Graph" = "line", "Bar Graph" = "bar"),
                              selected = "line"
                 ),
-                
                 hr(),
-                helpText("Inventory has no true absolute value — use MoM or YoY for inventory trends."),
+                helpText("Inventory has no absolute value — use MoM or YoY for inventory trends."),
                 helpText("Summary statistics reflect the most recent month in the selected range.")
               ),
               
@@ -141,7 +137,7 @@ ui <- page_navbar(
                             choices = c("Nassau County", "New York City", "Westchester County")
                 ),
                 numericInput("pred_year", "Forecast Through Year:",
-                             value = 2026, min = 2016, max = 2035
+                             value = 2026, min = 2012, max = 2035
                 ),
                 hr(),
                 helpText("The line graph shows actual prices and the model fitted and forecasted trend.")

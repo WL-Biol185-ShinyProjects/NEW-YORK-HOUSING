@@ -1,14 +1,21 @@
 server <- function(input, output) {
   
-  # --- Clean helper: strips $, K, %, commas, and empty strings ---
+  # --- Clean helper ---
   clean_numeric <- function(x) {
     x[x == ""] <- NA
     as.numeric(gsub("\\$|K|%|,", "", x))
   }
   
+  # --- Region lookup: dropdown label -> Region.Group value ---
+  region_map <- c(
+    "Nassau County"      = "Nassau County",
+    "New York City"      = "New York City",
+    "Westchester County" = "Westchester"
+  )
+  
   # --- Filtered and cleaned data ---
   market_df <- reactive({
-    nychousing %>%
+    df <- nychousing %>%
       mutate(
         Median.Sale.Price            = clean_numeric(Median.Sale.Price) * 1000,
         Median.Sale.Price.MoM        = clean_numeric(Median.Sale.Price.MoM),
@@ -38,11 +45,13 @@ server <- function(input, output) {
           TRUE ~ "Other"
         )
       ) %>%
-      filter(!is.na(Median.Sale.Price)) %>%
-      { if (input$market_region != "All Regions")
-        filter(., Region.Group == input$market_region)
-        else . } %>%
-      filter(year_num >= input$market_years[1] & year_num <= input$market_years[2])
+      filter(!is.na(Median.Sale.Price))
+    
+    if (input$market_region != "All Regions") {
+      df <- df %>% filter(Region.Group == region_map[input$market_region])
+    }
+    
+    df %>% filter(year_num >= input$market_years[1] & year_num <= input$market_years[2])
   })
   
   # --- Determine which column to plot ---
@@ -55,7 +64,7 @@ server <- function(input, output) {
   
   # --- Latest month summary ---
   latest <- reactive({
-    df  <- market_df()
+    df      <- market_df()
     col     <- input$market_metric
     mom_col <- paste0(col, ".MoM")
     yoy_col <- paste0(col, ".YoY")
@@ -69,7 +78,7 @@ server <- function(input, output) {
         .groups = "drop"
       ) %>%
       filter(date == max(date, na.rm = TRUE))
-})
+  })
   
   # --- Format helper ---
   format_val <- function(val, metric) {
@@ -135,7 +144,8 @@ server <- function(input, output) {
     
     if (nrow(df) == 0) {
       return(ggplot() +
-               annotate("text", x = 0.5, y = 0.5, label = "No data available for this selection",
+               annotate("text", x = 0.5, y = 0.5,
+                        label = "No data available for this selection",
                         size = 6, color = "gray50") +
                theme_void())
     }
@@ -234,7 +244,6 @@ server <- function(input, output) {
     last_date    <- max(plot_df$date)
     forecast_end <- as.Date(paste0(input$pred_year, "-12-01"))
     
-    # Only forecast if pred_year is beyond the last date in the data
     if (forecast_end <= last_date) {
       forecast_df <- data.frame(date = as.Date(character(0))) %>%
         mutate(time_index = integer(0), month_num = integer(0))
