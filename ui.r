@@ -62,18 +62,47 @@ ui <- page_navbar(
             layout_sidebar(
               sidebar = sidebar(
                 title = "Market Controls",
+                
                 selectInput("market_region", "Select Region:",
                             choices = c("All Regions", "Nassau County", "New York City", "Westchester County")
                 ),
+                
                 sliderInput("market_years", "Year Range:",
                             min = 2012, max = 2024, value = c(2012, 2024), sep = ""
                 ),
+                
+                selectInput("market_metric", "Select Metric:",
+                            choices = c(
+                              "Median Sale Price"        = "Median.Sale.Price",
+                              "Homes Sold"               = "Homes.Sold",
+                              "New Listings"             = "New.Listings",
+                              "Inventory"                = "Inventory",
+                              "Days on Market"           = "Days.on.Market",
+                              "Avg Sale to List Ratio"   = "Average.Sale.To.List"
+                            )
+                ),
+                
+                selectInput("market_change", "View Change As:",
+                            choices = c(
+                              "Actual Value" = "actual",
+                              "Month-over-Month" = "MoM",
+                              "Year-over-Year"   = "YoY"
+                            )
+                ),
+                
+                radioButtons("market_chart", "Chart Type:",
+                             choices  = c("Line Graph" = "line", "Bar Graph" = "bar"),
+                             selected = "line"
+                ),
+                
                 hr(),
                 helpText("Summary statistics reflect the most recent month in the selected range.")
               ),
+              
+              # --- Summary Cards ---
               layout_columns(
                 value_box(
-                  title = "Current Median Price",
+                  title = "Current Value",
                   value = textOutput("card_price"),
                   theme = "primary"
                 ),
@@ -98,6 +127,7 @@ ui <- page_navbar(
                   theme = "danger"
                 )
               ),
+              
               plotOutput("market_plot", height = "50vh")
             )
   ),
