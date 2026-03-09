@@ -126,7 +126,63 @@ ui <- page_navbar(
             )
   ),
   
-  nav_panel("Region Overview", "Page B content"),
+  nav_panel("Region Overview",
+            layout_sidebar(
+              sidebar = sidebar(
+                title = "Region Controls",
+                
+                selectInput("region_metric", "Select Metric:",
+                            choices = c(
+                              "Median Sale Price"      = "Median.Sale.Price",
+                              "Homes Sold"             = "Homes.Sold",
+                              "New Listings"           = "New.Listings",
+                              "Inventory"              = "Inventory",
+                              "Days on Market"         = "Days.on.Market",
+                              "Avg Sale to List Ratio" = "Average.Sale.To.List"
+                            )
+                ),
+                
+                selectInput("region_change", "View Change As:",
+                            choices = c(
+                              "Actual Value"     = "actual",
+                              "Month-over-Month" = "MoM",
+                              "Year-over-Year"   = "YoY"
+                            )
+                ),
+                
+                sliderInput("region_years", "Year Range:",
+                            min = 2016, max = 2025, value = c(2016, 2025), sep = ""
+                ),
+                
+                hr(),
+                helpText("Compare all regions side by side. Use the ranking chart to see which region leads each metric.")
+              ),
+              
+              h4("Regional Scorecards — Latest Month"),
+              layout_columns(
+                col_widths = c(4, 4, 4),
+                uiOutput("scorecard_nassau"),
+                uiOutput("scorecard_nyc"),
+                uiOutput("scorecard_westchester")
+              ),
+              
+              hr(),
+              
+              h4("All Regions Over Time"),
+              plotOutput("region_line_plot", height = "40vh"),
+              
+              hr(),
+              
+              h4("Region Ranking — Most Recent Month"),
+              plotOutput("region_rank_plot", height = "30vh"),
+              
+              hr(),
+              
+              h4("Month-over-Month & Year-over-Year Changes"),
+              tableOutput("region_change_table")
+            )
+  ),
+  
   nav_panel("Map", "Page C content"),
   
   nav_panel("Prediction Model",

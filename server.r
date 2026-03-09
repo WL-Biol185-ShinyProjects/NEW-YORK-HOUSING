@@ -13,9 +13,9 @@ server <- function(input, output) {
     "Westchester County" = "Westchester"
   )
   
-  # --- Filtered and cleaned data ---
-  market_df <- reactive({
-    df <- nychousing %>%
+  # --- Shared cleaned + grouped dataset ---
+  clean_df <- reactive({
+    nychousing %>%
       mutate(
         Median.Sale.Price            = clean_numeric(Median.Sale.Price) * 1000,
         Median.Sale.Price.MoM        = clean_numeric(Median.Sale.Price.MoM),
@@ -44,8 +44,15 @@ server <- function(input, output) {
           Region == "Westchester County, NY"                                 ~ "Westchester",
           TRUE ~ "Other"
         )
-      ) %>%
-      filter(!is.na(Median.Sale.Price))
+      )
+  })
+  
+  # ============================================================
+  # MARKET OVERVIEW
+  # ============================================================
+  
+  market_df <- reactive({
+    df <- clean_df() %>% filter(!is.na(Median.Sale.Price))
     
     if (input$market_region != "All Regions") {
       df <- df %>% filter(Region.Group == region_map[input$market_region])
@@ -54,7 +61,6 @@ server <- function(input, output) {
     df %>% filter(year_num >= input$market_years[1] & year_num <= input$market_years[2])
   })
   
-  # --- Determine which column to plot ---
   plot_col <- reactive({
     metric <- input$market_metric
     change <- input$market_change
@@ -62,7 +68,6 @@ server <- function(input, output) {
     if (change == "actual") metric else paste0(metric, ".", change)
   })
   
-  # --- Latest month summary ---
   latest <- reactive({
     df      <- market_df()
     col     <- input$market_metric
@@ -80,7 +85,6 @@ server <- function(input, output) {
       filter(date == max(date, na.rm = TRUE))
   })
   
-  # --- Format helper ---
   format_val <- function(val, metric) {
     if (is.na(val)) return("N/A")
     if (metric == "Median.Sale.Price") {
@@ -92,7 +96,6 @@ server <- function(input, output) {
     }
   }
   
-  # --- Summary Cards ---
   output$card_price <- renderText({
     metric <- input$market_metric
     if (metric == "Inventory") return("See MoM/YoY")
@@ -131,7 +134,6 @@ server <- function(input, output) {
     paste0(format_val(vals[idx], metric), " — ", format(df$date[idx], "%b %Y"))
   })
   
-  # --- Market Overview Chart ---
   output$market_plot <- renderPlot({
     df  <- market_df()
     col <- plot_col()
@@ -214,7 +216,186 @@ server <- function(input, output) {
       theme(plot.title = element_text(face = "bold"), legend.position = "bottom")
   })
   
-  # --- Prediction Model Plot ---
+  # ============================================================
+  # REGION OVERVIEW
+  # ============================================================
+  
+  region_colors <- c(
+    "Nassau County" = "#E63946",
+    "New York City" = "#457B9D",
+    "Westchester"   = "#2A9D8F"
+  )
+  
+  region_col <- reactive({
+    metric <- input$region_metric
+    change <- input$region_change
+    if (change == "actual") metric else paste0(metric, ".", change)
+  })
+  
+  region_df <- reactive({
+    col <- region_col()
+    clean_df() %>%
+      filter(!is.na(.data[[col]])) %>%
+      filter(year_num >= input$region_years[1],
+             year_num <= input$region_years[2]) %>%
+      group_by(date, Region.Group) %>%
+      summarise(value = mean(.data[[col]], na.rm = TRUE), .groups = "drop")
+  })
+  
+  region_latest <- reactive({
+    region_df() %>%
+      filter(date == max(date)) %>%
+      arrange(desc(value))
+  })
+  
+  format_region_val <- function(val, metric, change) {
+    if (is.na(val)) return("N/A")
+    if (change %in% c("MoM", "YoY")) {
+      paste0(ifelse(val >= 0, "+", ""), round(val, 1), "%")
+    } else if (metric == "Median.Sale.Price") {
+      paste0("$", formatC(val / 1000, format = "f", digits = 0), "K")
+    } else if (metric == "Average.Sale.To.List") {
+      paste0(round(val * 100, 1), "%")
+    } else {
+      formatC(round(val, 0), format = "d", big.mark = ",")
+    }
+  }
+  
+  make_scorecard <- function(region_name, display_name, color) {
+    renderUI({
+      metric  <- input$region_metric
+      change  <- input$region_change
+      col     <- region_col()
+      mom_col <- paste0(metric, ".MoM")
+      yoy_col <- paste0(metric, ".YoY")
+      
+      base <- clean_df() %>% filter(Region.Group == region_name)
+      
+      latest_val <- base %>%
+        filter(!is.na(.data[[col]]), date == max(date[!is.na(.data[[col]])])) %>%
+        summarise(v = mean(.data[[col]], na.rm = TRUE)) %>%
+        pull(v)
+      
+      mom_val <- base %>%
+        filter(!is.na(.data[[mom_col]]), date == max(date[!is.na(.data[[mom_col]])])) %>%
+        summarise(v = mean(.data[[mom_col]], na.rm = TRUE)) %>%
+        pull(v)
+      
+      yoy_val <- base %>%
+        filter(!is.na(.data[[yoy_col]]), date == max(date[!is.na(.data[[yoy_col]])])) %>%
+        summarise(v = mean(.data[[yoy_col]], na.rm = TRUE)) %>%
+        pull(v)
+      
+      val_fmt <- format_region_val(if (length(latest_val)) latest_val else NA, metric, change)
+      mom_fmt <- if (length(mom_val) && !is.na(mom_val))
+        paste0(ifelse(mom_val >= 0, "+", ""), round(mom_val, 1), "% MoM") else ""
+      yoy_fmt <- if (length(yoy_val) && !is.na(yoy_val))
+        paste0(ifelse(yoy_val >= 0, "+", ""), round(yoy_val, 1), "% YoY") else ""
+      
+      div(
+        style = paste0(
+          "background-color:", color, "; color: white; border-radius: 10px;",
+          "padding: 14px 10px; text-align: center; min-height: 120px;"
+        ),
+        tags$strong(style = "font-size: 12px; opacity: 0.85;", display_name),
+        tags$div(style = "font-size: 22px; font-weight: bold; margin: 6px 0;", val_fmt),
+        tags$div(style = "font-size: 11px; opacity: 0.85;", mom_fmt),
+        tags$div(style = "font-size: 11px; opacity: 0.85;", yoy_fmt)
+      )
+    })
+  }
+  
+  output$scorecard_nassau      <- make_scorecard("Nassau County", "Nassau County", "#E63946")
+  output$scorecard_nyc         <- make_scorecard("New York City", "New York City", "#457B9D")
+  output$scorecard_westchester <- make_scorecard("Westchester",   "Westchester",   "#2A9D8F")
+  
+  output$region_line_plot <- renderPlot({
+    df <- region_df()
+    
+    y_label <- case_when(
+      input$region_change == "MoM" ~ paste(input$region_metric, "MoM (%)"),
+      input$region_change == "YoY" ~ paste(input$region_metric, "YoY (%)"),
+      input$region_metric == "Median.Sale.Price" ~ "Median Sale Price",
+      TRUE ~ input$region_metric
+    )
+    
+    y_scale <- if (input$region_change %in% c("MoM", "YoY")) {
+      scale_y_continuous(labels = function(x) paste0(x, "%"))
+    } else if (input$region_metric == "Median.Sale.Price") {
+      scale_y_continuous(labels = scales::dollar_format(scale = 0.001, suffix = "K"))
+    } else if (input$region_metric == "Average.Sale.To.List") {
+      scale_y_continuous(labels = scales::percent_format(scale = 100))
+    } else {
+      scale_y_continuous(labels = scales::comma)
+    }
+    
+    ggplot(df, aes(x = date, y = value, color = Region.Group)) +
+      geom_line(linewidth = 1) +
+      scale_color_manual(values = region_colors) +
+      y_scale +
+      labs(title = paste("All Regions —", y_label),
+           x = "Date", y = y_label, color = "Region") +
+      theme_minimal(base_size = 13) +
+      theme(plot.title = element_text(face = "bold"), legend.position = "bottom")
+  })
+  
+  output$region_rank_plot <- renderPlot({
+    metric <- input$region_metric
+    change <- input$region_change
+    df     <- region_latest()
+    
+    bar_label <- if (change %in% c("MoM", "YoY")) {
+      function(x) paste0(ifelse(x >= 0, "+", ""), round(x, 1), "%")
+    } else if (metric == "Median.Sale.Price") {
+      function(x) paste0("$", round(x / 1000, 0), "K")
+    } else {
+      function(x) formatC(round(x, 0), format = "d", big.mark = ",")
+    }
+    
+    ggplot(df, aes(x = reorder(Region.Group, value), y = value, fill = Region.Group)) +
+      geom_col(show.legend = FALSE) +
+      geom_text(aes(label = bar_label(value)), hjust = -0.1, size = 3.5) +
+      coord_flip() +
+      scale_fill_manual(values = region_colors) +
+      scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+      labs(title = paste("Region Ranking —", metric), x = NULL, y = NULL) +
+      theme_minimal(base_size = 13) +
+      theme(plot.title = element_text(face = "bold"))
+  })
+  
+  output$region_change_table <- renderTable({
+    metric  <- input$region_metric
+    mom_col <- paste0(metric, ".MoM")
+    yoy_col <- paste0(metric, ".YoY")
+    
+    latest_date <- max(clean_df()$date, na.rm = TRUE)
+    
+    clean_df() %>%
+      filter(date == latest_date) %>%
+      group_by(Region.Group) %>%
+      summarise(
+        `Latest Value` = mean(.data[[metric]], na.rm = TRUE),
+        `MoM Change`   = mean(.data[[mom_col]], na.rm = TRUE),
+        `YoY Change`   = mean(.data[[yoy_col]], na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        `Latest Value` = if (metric == "Median.Sale.Price")
+          paste0("$", formatC(`Latest Value` / 1000, format = "f", digits = 0), "K")
+        else if (metric == "Average.Sale.To.List")
+          paste0(round(`Latest Value` * 100, 1), "%")
+        else
+          formatC(round(`Latest Value`, 0), format = "d", big.mark = ","),
+        `MoM Change` = paste0(ifelse(`MoM Change` >= 0, "+", ""), round(`MoM Change`, 1), "%"),
+        `YoY Change` = paste0(ifelse(`YoY Change` >= 0, "+", ""), round(`YoY Change`, 1), "%")
+      ) %>%
+      rename(Region = Region.Group)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE)
+  
+  # ============================================================
+  # PREDICTION MODEL
+  # ============================================================
+  
   output$prediction_plot <- renderPlot({
     
     if (input$pred_region == "Nassau County") {
