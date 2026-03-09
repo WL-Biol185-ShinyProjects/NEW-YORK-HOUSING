@@ -1,6 +1,5 @@
 library(shiny)
 library(bslib)
-library(bsicons)
 library(dplyr)
 library(lubridate)
 library(ggplot2)
@@ -55,7 +54,9 @@ ui <- page_navbar(
   title = "New York Housing Analysis",
   id    = "page",
   
-  nav_panel("Home", "NYC metro area including data from NYC, Westchester, and Nassau County"),
+  nav_panel("Home",
+            "NYC metro area including data from NYC, Westchester, and Nassau County"
+  ),
   
   nav_panel("Market Overview",
             layout_sidebar(
@@ -70,40 +71,33 @@ ui <- page_navbar(
                 hr(),
                 helpText("Summary statistics reflect the most recent month in the selected range.")
               ),
-              # --- Summary Cards ---
               layout_columns(
                 value_box(
-                  title   = "Current Median Price",
-                  value   = textOutput("card_price"),
-                  showcase = bsicons::bs_icon("house-fill"),
-                  theme   = "primary"
+                  title = "Current Median Price",
+                  value = textOutput("card_price"),
+                  theme = "primary"
                 ),
                 value_box(
-                  title   = "Month-over-Month",
-                  value   = textOutput("card_mom"),
-                  showcase = bsicons::bs_icon("arrow-left-right"),
-                  theme   = "success"
+                  title = "Month-over-Month",
+                  value = textOutput("card_mom"),
+                  theme = "success"
                 ),
                 value_box(
-                  title   = "Year-over-Year",
-                  value   = textOutput("card_yoy"),
-                  showcase = bsicons::bs_icon("calendar"),
-                  theme   = "info"
+                  title = "Year-over-Year",
+                  value = textOutput("card_yoy"),
+                  theme = "info"
                 ),
                 value_box(
-                  title   = "All-Time High",
-                  value   = textOutput("card_high"),
-                  showcase = bsicons::bs_icon("graph-up-arrow"),
-                  theme   = "warning"
+                  title = "All-Time High",
+                  value = textOutput("card_high"),
+                  theme = "warning"
                 ),
                 value_box(
-                  title   = "All-Time Low",
-                  value   = textOutput("card_low"),
-                  showcase = bsicons::bs_icon("graph-down-arrow"),
-                  theme   = "danger"
+                  title = "All-Time Low",
+                  value = textOutput("card_low"),
+                  theme = "danger"
                 )
               ),
-              # --- Line Chart ---
               plotOutput("market_plot", height = "50vh")
             )
   ),
@@ -119,7 +113,8 @@ ui <- page_navbar(
                             choices = c("Nassau County", "New York City", "Westchester County")
                 ),
                 numericInput("pred_year", "Forecast Through Year:",
-                             value = 2026, min = 2012, max = 2035),
+                             value = 2026, min = 2012, max = 2035
+                ),
                 hr(),
                 helpText("The line graph shows actual prices and the model fitted and forecasted trend.")
               ),
