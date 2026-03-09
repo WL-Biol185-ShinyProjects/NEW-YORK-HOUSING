@@ -68,7 +68,7 @@ ui <- page_navbar(
                 ),
                 
                 sliderInput("market_years", "Year Range:",
-                            min = 2012, max = 2025, value = c(2012, 2025), sep = ""
+                            min = 2016, max = 2025, value = c(2016, 2025), sep = ""
                 ),
                 
                 selectInput("market_metric", "Select Metric:",
@@ -143,7 +143,7 @@ ui <- page_navbar(
                             choices = c("Nassau County", "New York City", "Westchester County")
                 ),
                 numericInput("pred_year", "Forecast Through Year:",
-                             value = 2026, min = 2012, max = 2035
+                             value = 2026, min = 2016, max = 2035
                 ),
                 hr(),
                 helpText("The line graph shows actual prices and the model fitted and forecasted trend.")
