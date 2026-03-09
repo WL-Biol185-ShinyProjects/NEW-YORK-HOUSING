@@ -4,7 +4,6 @@ server <- function(input, output) {
   market_df <- reactive({
     df <- nychousing %>% filter(!is.na(Median.Sale.Price))
     
-    # Filter by region
     if (input$market_region == "Nassau County") {
       df <- df %>% filter(Region %in% c("Nassau County,NY", "Nassau County, NY metro area"))
     } else if (input$market_region == "New York City") {
@@ -13,7 +12,6 @@ server <- function(input, output) {
       df <- df %>% filter(Region == "Westchester County, NY")
     }
     
-    # Filter by year range
     df %>% filter(year_num >= input$market_years[1] & year_num <= input$market_years[2])
   })
   
@@ -22,9 +20,9 @@ server <- function(input, output) {
     market_df() %>%
       filter(date == max(date)) %>%
       summarise(
-        price = mean(Median.Sale.Price,       na.rm = TRUE),
-        mom   = mean(Median.Sale.Price.MoM,   na.rm = TRUE),
-        yoy   = mean(Median.Sale.Price.YoY,   na.rm = TRUE)
+        price = mean(Median.Sale.Price, na.rm = TRUE),
+        mom   = mean(as.numeric(gsub("%", "", Median.Sale.Price.MoM)), na.rm = TRUE),
+        yoy   = mean(as.numeric(gsub("%", "", Median.Sale.Price.YoY)), na.rm = TRUE)
       )
   })
   
@@ -47,14 +45,16 @@ server <- function(input, output) {
     high <- market_df() %>%
       filter(Median.Sale.Price == max(Median.Sale.Price, na.rm = TRUE)) %>%
       slice(1)
-    paste0("$", formatC(high$Median.Sale.Price / 1000, format = "f", digits = 0), "K — ", format(high$date, "%b %Y"))
+    paste0("$", formatC(high$Median.Sale.Price / 1000, format = "f", digits = 0),
+           "K — ", format(high$date, "%b %Y"))
   })
   
   output$card_low <- renderText({
     low <- market_df() %>%
       filter(Median.Sale.Price == min(Median.Sale.Price, na.rm = TRUE)) %>%
       slice(1)
-    paste0("$", formatC(low$Median.Sale.Price / 1000, format = "f", digits = 0), "K — ", format(low$date, "%b %Y"))
+    paste0("$", formatC(low$Median.Sale.Price / 1000, format = "f", digits = 0),
+           "K — ", format(low$date, "%b %Y"))
   })
   
   # --- Market Overview Line Chart ---
@@ -63,21 +63,24 @@ server <- function(input, output) {
       group_by(date, Region) %>%
       summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop")
     
-    # Mark all-time high point
-    high_point <- df %>% filter(Median.Sale.Price == max(Median.Sale.Price, na.rm = TRUE)) %>% slice(1)
+    high_point <- df %>%
+      filter(Median.Sale.Price == max(Median.Sale.Price, na.rm = TRUE)) %>%
+      slice(1)
     
     ggplot(df, aes(x = date, y = Median.Sale.Price, color = Region)) +
       geom_line(linewidth = 1) +
-      geom_point(data = high_point, aes(x = date, y = Median.Sale.Price),
-                 color = "red", size = 4, shape = 18) +
+      geom_point(data = high_point,
+                 aes(x = date, y = Median.Sale.Price),
+                 color = "red", size = 4, shape = 18, inherit.aes = FALSE) +
       geom_label(data = high_point,
                  aes(x = date, y = Median.Sale.Price,
                      label = paste0("High: $", formatC(Median.Sale.Price / 1000, format = "f", digits = 0), "K")),
                  nudge_y = 20000, size = 3.5, color = "red", inherit.aes = FALSE) +
-      # COVID marker
-      geom_vline(xintercept = as.Date("2020-03-01"), linetype = "dashed", color = "gray40") +
+      geom_vline(xintercept = as.Date("2020-03-01"),
+                 linetype = "dashed", color = "gray40") +
       annotate("text", x = as.Date("2020-03-01"), y = Inf,
-               label = "COVID-19", vjust = 2, hjust = -0.1, size = 3, color = "gray40") +
+               label = "COVID-19", vjust = 2, hjust = -0.1,
+               size = 3, color = "gray40") +
       scale_y_continuous(labels = scales::dollar_format(scale = 0.001, suffix = "K")) +
       scale_color_manual(values = c(
         "Nassau County,NY"             = "#E63946",
@@ -144,11 +147,14 @@ server <- function(input, output) {
     
     ggplot() +
       geom_line(data = plot_df,
-                aes(x = date, y = Median.Sale.Price, color = "Actual"), linewidth = 1) +
+                aes(x = date, y = Median.Sale.Price, color = "Actual"),
+                linewidth = 1) +
       geom_line(data = plot_df,
-                aes(x = date, y = fitted, color = "Model Fit"), linewidth = 0.8, linetype = "dashed") +
+                aes(x = date, y = fitted, color = "Model Fit"),
+                linewidth = 0.8, linetype = "dashed") +
       geom_line(data = forecast_df,
-                aes(x = date, y = Median.Sale.Price, color = "Forecast"), linewidth = 1, linetype = "dotted") +
+                aes(x = date, y = Median.Sale.Price, color = "Forecast"),
+                linewidth = 1, linetype = "dotted") +
       scale_color_manual(
         name   = "",
         values = c("Actual" = "#2C3E50", "Model Fit" = "#E63946", "Forecast" = "#457B9D")
