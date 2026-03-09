@@ -69,7 +69,7 @@ server <- function(input, output) {
         .groups = "drop"
       ) %>%
       filter(date == max(date, na.rm = TRUE))
-  })
+})
   
   # --- Format helper ---
   format_val <- function(val, metric) {
