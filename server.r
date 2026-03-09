@@ -5,7 +5,6 @@ date: "2026-02-16"
 ---
 
 
-```{r}
 
 library(shiny)
 library(bslib)
@@ -167,14 +166,11 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
-```
 
-```{r}
 library(shiny) 
 library(ggplot2)
 library(tidyverse)
 
-```
 
 ## R Markdown
 #Nassau 1-336
@@ -184,7 +180,6 @@ library(tidyverse)
 #c
 
 
-```{r}
 nychousing <- read.csv("nychousing.csv")
 nychousing$Region <- c(rep("Nassua County, NY", times = 168), 
               rep("Nassua County, NY metro area", times= 168), 
@@ -193,7 +188,6 @@ nychousing$Region <- c(rep("Nassua County, NY", times = 168),
               rep("Westchester County, NY", times = 128), 
               recursive = TRUE
               )
-```
 
 
 

@@ -5,12 +5,11 @@ date: "2026-02-16"
 ---
 
   
-```{r}
+
 library(shiny)
-```
 
 
-```{r}
+
 library(dplyr)
 library(lubridate)
 
@@ -59,9 +58,6 @@ summary(nyc_model)
 summary(westchester_model)
 
 
-```
-
-```{r}
 library(shiny)
 library(bslib)
 
@@ -91,4 +87,3 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
-```
