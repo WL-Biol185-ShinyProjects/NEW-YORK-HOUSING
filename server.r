@@ -4,11 +4,18 @@ server <- function(input, output) {
   market_df <- reactive({
     df <- nychousing %>%
       mutate(
-        Median.Sale.Price = as.numeric(gsub("\\$|K", "", Median.Sale.Price)) * 1000,
+        # Strip $ and K for price
+        Median.Sale.Price    = as.numeric(gsub("\\$|K", "", Median.Sale.Price)) * 1000,
+        # Strip commas from numeric columns
+        Homes.Sold           = as.numeric(gsub(",", "", Homes.Sold)),
+        New.Listings         = as.numeric(gsub(",", "", New.Listings)),
+        Inventory            = as.numeric(gsub(",", "", Inventory)),
+        Days.on.Market       = as.numeric(gsub(",", "", Days.on.Market)),
+        # Strip % from ratio column
+        Average.Sale.To.List = as.numeric(gsub("%", "", Average.Sale.To.List)),
         date      = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
         year_num  = year(date),
         month_num = month(date),
-        # --- Combine regions into three groups ---
         Region.Group = case_when(
           Region %in% c("Nassau County,NY", "Nassau County, NY metro area") ~ "Nassau County",
           Region %in% c("New York, NY", "New York, NY metro area")          ~ "New York City",
