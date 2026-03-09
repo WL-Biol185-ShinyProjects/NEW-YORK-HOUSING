@@ -2,7 +2,14 @@ server <- function(input, output) {
   
   # --- Filtered data for Market Overview ---
   market_df <- reactive({
-    df <- nychousing %>% filter(!is.na(Median.Sale.Price))
+    df <- nychousing %>% 
+      filter(!is.na(Median.Sale.Price)) %>%
+      mutate(
+        Median.Sale.Price = as.numeric(gsub("\\$|K", "", Median.Sale.Price)) * 1000,
+        date      = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
+        year_num  = year(date),
+        month_num = month(date)
+      )
     
     if (input$market_region == "Nassau County") {
       df <- df %>% filter(Region %in% c("Nassau County,NY", "Nassau County, NY metro area"))
