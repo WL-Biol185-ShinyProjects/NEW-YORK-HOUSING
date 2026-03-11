@@ -55,7 +55,45 @@ ui <- page_navbar(
   id    = "page",
   
   nav_panel("Home",
-            "NYC metro area including data from NYC, Westchester, and Nassau County"
+            div(
+              style = paste0(
+                "position: relative; height: calc(100vh - 54px); overflow: hidden;",
+                "display: flex; align-items: center; justify-content: center;"
+              ),
+              # --- Background Image ---
+              tags$img(
+                src   = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Southwest_corner_of_Central_Park%2C_looking_east%2C_NYC.jpg/1280px-Southwest_corner_of_Central_Park%2C_looking_east%2C_NYC.jpg",
+                style = paste0(
+                  "position: absolute; top: 0; left: 0;",
+                  "width: 100%; height: 100%;",
+                  "object-fit: cover; object-position: center;",
+                  "filter: brightness(0.45);"
+                )
+              ),
+              # --- Text Overlay ---
+              div(
+                style = paste0(
+                  "position: relative; z-index: 1;",
+                  "text-align: center; color: white; padding: 20px;"
+                ),
+                tags$h1(
+                  "NYC METRO HOUSING",
+                  style = paste0(
+                    "font-size: 64px; font-weight: 900;",
+                    "letter-spacing: 4px; margin-bottom: 16px;",
+                    "text-shadow: 2px 2px 8px rgba(0,0,0,0.8);"
+                  )
+                ),
+                tags$p(
+                  "Exploring the NYC Metro Area Housing Market",
+                  style = paste0(
+                    "font-size: 24px; font-weight: 300;",
+                    "letter-spacing: 2px;",
+                    "text-shadow: 1px 1px 4px rgba(0,0,0,0.8);"
+                  )
+                )
+              )
+            )
   ),
   
   nav_panel("Market Overview",
