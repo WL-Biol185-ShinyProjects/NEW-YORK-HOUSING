@@ -295,12 +295,13 @@ server <- function(input, output) {
       div(
         style = paste0(
           "background-color:", color, "; color: white; border-radius: 10px;",
-          "padding: 14px 10px; text-align: center; min-height: 120px;"
+          "padding: 20px 15px; text-align: center; min-height: 160px;",
+          "display: flex; flex-direction: column; justify-content: center;"
         ),
-        tags$strong(style = "font-size: 12px; opacity: 0.85;", display_name),
-        tags$div(style = "font-size: 22px; font-weight: bold; margin: 6px 0;", val_fmt),
-        tags$div(style = "font-size: 11px; opacity: 0.85;", mom_fmt),
-        tags$div(style = "font-size: 11px; opacity: 0.85;", yoy_fmt)
+        tags$strong(style = "font-size: 14px; opacity: 0.85;", display_name),
+        tags$div(style = "font-size: 26px; font-weight: bold; margin: 8px 0;", val_fmt),
+        tags$div(style = "font-size: 13px; opacity: 0.85;", mom_fmt),
+        tags$div(style = "font-size: 13px; opacity: 0.85;", yoy_fmt)
       )
     })
   }

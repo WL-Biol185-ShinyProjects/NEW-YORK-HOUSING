@@ -66,7 +66,7 @@ ui <- page_navbar(
                             choices = c("All Regions", "Nassau County", "New York City", "Westchester County")
                 ),
                 sliderInput("market_years", "Year Range:",
-                            min = 2012, max = 2025, value = c(2012, 2025), sep = ""
+                            min = 2016, max = 2025, value = c(2016, 2025), sep = ""
                 ),
                 selectInput("market_metric", "Select Metric:",
                             choices = c(
@@ -128,8 +128,10 @@ ui <- page_navbar(
   
   nav_panel("Region Overview",
             layout_sidebar(
+              fill = FALSE,
               sidebar = sidebar(
-                title = "Region Controls",
+                title  = "Region Controls",
+                width  = 250,
                 
                 selectInput("region_metric", "Select Metric:",
                             choices = c(
@@ -161,6 +163,7 @@ ui <- page_navbar(
               h4("Regional Scorecards — Latest Month"),
               layout_columns(
                 col_widths = c(4, 4, 4),
+                fill       = FALSE,
                 uiOutput("scorecard_nassau"),
                 uiOutput("scorecard_nyc"),
                 uiOutput("scorecard_westchester")
@@ -169,12 +172,12 @@ ui <- page_navbar(
               hr(),
               
               h4("All Regions Over Time"),
-              plotOutput("region_line_plot", height = "40vh"),
+              plotOutput("region_line_plot", height = "500px"),
               
               hr(),
               
               h4("Region Ranking — Most Recent Month"),
-              plotOutput("region_rank_plot", height = "30vh"),
+              plotOutput("region_rank_plot", height = "350px"),
               
               hr(),
               
@@ -193,7 +196,7 @@ ui <- page_navbar(
                             choices = c("Nassau County", "New York City", "Westchester County")
                 ),
                 numericInput("pred_year", "Forecast Through Year:",
-                             value = 2026, min = 2012, max = 2035
+                             value = 2026, min = 2016, max = 2035
                 ),
                 hr(),
                 helpText("The line graph shows actual prices and the model fitted and forecasted trend.")
