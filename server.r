@@ -1,4 +1,4 @@
-server <- function(input, output) {
+function(input, output) {
   
   # --- Clean helper ---
   clean_numeric <- function(x) {
@@ -6,7 +6,7 @@ server <- function(input, output) {
     as.numeric(gsub("\\$|K|%|,", "", x))
   }
   
-  # --- Region lookup: dropdown label -> Region.Group value ---
+  # --- Region lookup ---
   region_map <- c(
     "Nassau County"      = "Nassau County",
     "New York City"      = "New York City",
@@ -135,6 +135,7 @@ server <- function(input, output) {
   })
   
   output$market_plot <- renderPlot({
+    req(input$market_region, input$market_metric, input$market_change)
     df  <- market_df()
     col <- plot_col()
     
@@ -398,6 +399,7 @@ server <- function(input, output) {
   # ============================================================
   
   output$prediction_plot <- renderPlot({
+    req(input$pred_region, input$pred_year)
     
     if (input$pred_region == "Nassau County") {
       plot_df <- nassau_df
@@ -423,7 +425,7 @@ server <- function(input, output) {
         summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop")
     }
     
-    last_date    <- max(plot_df$date)
+    last_date    <- max(plot_df$date, na.rm = TRUE)
     forecast_end <- as.Date(paste0(input$pred_year, "-12-01"))
     
     if (forecast_end <= last_date) {
