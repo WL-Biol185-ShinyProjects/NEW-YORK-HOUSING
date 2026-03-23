@@ -18,10 +18,39 @@ ui <- page_navbar(
       rel  = "stylesheet"
     ),
     tags$style(HTML("
-      body, .navbar, .sidebar, p, h1, h2, h3, h4, h5, h6,
-      .value-box, table, .shiny-text-output {
-        font-family: 'DM Serif Display', serif !important;
-       }
+  body, .navbar, .sidebar, p, h1, h2, h3, h4, h5, h6,
+  .value-box, table, .shiny-text-output {
+    font-family: 'DM Serif Display', serif !important;
+  }
+
+  /* Navbar */
+  .navbar {
+    background-color: #0A1929 !important;
+    border-bottom: 1px solid #1565C0 !important;
+  }
+
+  /* Navbar text and links */
+  .navbar-nav .nav-link, .navbar-brand {
+    color: white !important;
+  }
+
+  .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active {
+    color: #A8C8E8 !important;
+    background-color: #1565C0 !important;
+    border-radius: 6px;
+  }
+
+  /* Sidebar */
+  .sidebar, .bslib-sidebar-panel {
+    background-color: #0A1929 !important;
+    color: white !important;
+  }
+
+  /* Sidebar labels and text */
+  .sidebar label, .sidebar .help-block, .sidebar p,
+  .sidebar .control-label, .sidebar h4, .sidebar h5 {
+    color: white !important;
+  }
     "))
   ),
   
