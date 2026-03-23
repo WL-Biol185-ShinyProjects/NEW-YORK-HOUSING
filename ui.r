@@ -12,6 +12,18 @@ ui <- page_navbar(
   title     = "New York Housing Analysis",
   id        = "page",
   underline = FALSE,
+  header = tags$head(
+    tags$link(
+      href = "https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap",
+      rel  = "stylesheet"
+    ),
+    tags$style(HTML("
+      body, .navbar, .sidebar, p, h1, h2, h3, h4, h5, h6,
+      .value-box, table, .shiny-text-output {
+        font-family: 'DM Serif Display', serif !important;
+       }
+    "))
+  ),
   
   nav_panel("Home",
             div(
