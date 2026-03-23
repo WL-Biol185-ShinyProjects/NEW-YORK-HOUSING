@@ -178,9 +178,9 @@ function(input, output) {
     if (input$market_change == "YoY") y_label <- paste(y_label, "YoY (%)")
     
     region_colors <- c(
-      "Nassau County" = "#E63946",
-      "New York City" = "#457B9D",
-      "Westchester"   = "#2A9D8F"
+      "Nassau County" = "#0A1929",
+      "New York City" = "#1565C0",
+      "Westchester"   = "#A8C8E8"
     )
     
     high_point <- df %>%
@@ -234,9 +234,9 @@ function(input, output) {
   # ============================================================
   
   region_colors <- c(
-    "Nassau County" = "#E63946",
-    "New York City" = "#457B9D",
-    "Westchester"   = "#2A9D8F"
+    "Nassau County" = "#0A1929",
+    "New York City" = "#1565C0",
+    "Westchester"   = "#A8C8E8"
   )
   
   region_col <- reactive({
