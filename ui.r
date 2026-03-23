@@ -92,27 +92,27 @@ ui <- page_navbar(
                 value_box(
                   title = "Current Value",
                   value = textOutput("card_price"),
-                  style = "background-color: #f4a0b5; color: white;"
+                  style = "background-color: #A8C8E8; color: white;"
                 ),
                 value_box(
                   title = "Month-over-Month",
                   value = textOutput("card_mom"),
-                  style = "background-color: #e87a9f; color: white;"
+                  style = "background-color: #7BA7D1; color: white;"
                 ),
                 value_box(
                   title = "Year-over-Year",
                   value = textOutput("card_yoy"),
-                  style = "background-color: #d45a85; color: white;"
+                  style = "background-color: #4F86BA; color: white;"
                 ),
                 value_box(
                   title = "All-Time High",
                   value = textOutput("card_high"),
-                  style = "background-color: #c0416e; color: white;"
+                  style = "background-color: #2E6699; color: white;"
                 ),
                 value_box(
                   title = "All-Time Low",
                   value = textOutput("card_low"),
-                  style = "background-color: #a8265a; color: white;"
+                  style = "background-color: #1A4670; color: white;"
                 )
               ),
               
