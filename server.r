@@ -319,9 +319,9 @@ function(input, output) {
     })
   }
   
-  output$scorecard_nassau      <- make_scorecard("Nassau County", "Nassau County", "#E63946")
-  output$scorecard_nyc         <- make_scorecard("New York City", "New York City", "#457B9D")
-  output$scorecard_westchester <- make_scorecard("Westchester",   "Westchester",   "#2A9D8F")
+  output$scorecard_nassau      <- make_scorecard("Nassau County", "Nassau County", "#0A1929")
+  output$scorecard_nyc         <- make_scorecard("New York City", "New York City", "#1565C0")
+  output$scorecard_westchester <- make_scorecard("Westchester",   "Westchester",   "#A8C8E8")
   
   output$region_line_plot <- renderPlot({
     df <- region_df()
