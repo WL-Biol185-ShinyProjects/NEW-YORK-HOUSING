@@ -5,50 +5,6 @@ library(lubridate)
 library(ggplot2)
 library(tidyverse)
 
-# --- Load Raw Data Only ---
-nychousing <- read.csv("nychousing.csv")
-
-# --- Assign Regions ---
-nychousing$Region <- c(
-  rep("Nassau County,NY",             times = 168),
-  rep("Nassau County, NY metro area", times = 168),
-  rep("New York, NY",                 times = 128),
-  rep("New York, NY metro area",      times = 128),
-  rep("Westchester County, NY",       times = 128)
-)
-
-# --- Clean data for models ---
-housing_clean <- nychousing %>%
-  mutate(
-    Median.Sale.Price = as.numeric(gsub("\\$|K|%|,", "", Median.Sale.Price)) * 1000,
-    date       = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
-    time_index = year(date) * 12 + month(date),
-    month_num  = month(date),
-    year_num   = year(date),
-    Region     = as.factor(Region)
-  )
-
-# --- Split into Three Regional Datasets ---
-nassau_df <- housing_clean %>%
-  filter(Region %in% c("Nassau County,NY", "Nassau County, NY metro area")) %>%
-  filter(!is.na(Median.Sale.Price)) %>%
-  mutate(Region = droplevels(Region))
-
-nyc_df <- housing_clean %>%
-  filter(Region %in% c("New York, NY", "New York, NY metro area")) %>%
-  filter(!is.na(Median.Sale.Price)) %>%
-  mutate(Region = droplevels(Region))
-
-westchester_df <- housing_clean %>%
-  filter(Region %in% c("Westchester County, NY")) %>%
-  filter(!is.na(Median.Sale.Price)) %>%
-  mutate(Region = droplevels(Region))
-
-# --- Build Models ---
-nassau_model      <- lm(Median.Sale.Price ~ time_index + month_num + Region, data = nassau_df)
-nyc_model         <- lm(Median.Sale.Price ~ time_index + month_num + Region, data = nyc_df)
-westchester_model <- lm(Median.Sale.Price ~ time_index + month_num,          data = westchester_df)
-
 # --- UI ---
 ui <- page_navbar(
   title = "New York Housing Analysis",

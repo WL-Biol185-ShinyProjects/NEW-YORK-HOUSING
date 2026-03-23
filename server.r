@@ -1,5 +1,16 @@
 function(input, output) {
   
+  # --- Load raw data once inside server ---
+  nychousing <- read.csv("nychousing.csv")
+  
+  nychousing$Region <- c(
+    rep("Nassau County,NY",             times = 168),
+    rep("Nassau County, NY metro area", times = 168),
+    rep("New York, NY",                 times = 128),
+    rep("New York, NY metro area",      times = 128),
+    rep("Westchester County, NY",       times = 128)
+  )
+  
   # --- Clean helper ---
   clean_numeric <- function(x) {
     x[x == ""] <- NA
@@ -38,6 +49,7 @@ function(input, output) {
         date      = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
         year_num  = year(date),
         month_num = month(date),
+        time_index = year(date) * 12 + month(date),
         Region.Group = case_when(
           Region %in% c("Nassau County,NY", "Nassau County, NY metro area") ~ "Nassau County",
           Region %in% c("New York, NY", "New York, NY metro area")          ~ "New York City",
@@ -401,29 +413,25 @@ function(input, output) {
   output$prediction_plot <- renderPlot({
     req(input$pred_region, input$pred_year)
     
+    # Build model data from clean_df()
+    base <- clean_df() %>%
+      filter(!is.na(Median.Sale.Price))
+    
     if (input$pred_region == "Nassau County") {
-      plot_df <- nassau_df
-      model   <- nassau_model
-      plot_df <- plot_df %>%
-        group_by(date, time_index, month_num) %>%
-        summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop") %>%
-        mutate(Region = factor("Nassau County,NY"))
-      
+      model_df <- base %>% filter(Region.Group == "Nassau County")
     } else if (input$pred_region == "New York City") {
-      plot_df <- nyc_df
-      model   <- nyc_model
-      plot_df <- plot_df %>%
-        group_by(date, time_index, month_num) %>%
-        summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop") %>%
-        mutate(Region = factor("New York, NY"))
-      
+      model_df <- base %>% filter(Region.Group == "New York City")
     } else {
-      plot_df <- westchester_df
-      model   <- westchester_model
-      plot_df <- plot_df %>%
-        group_by(date, time_index, month_num) %>%
-        summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop")
+      model_df <- base %>% filter(Region.Group == "Westchester")
     }
+    
+    # Build model on the fly
+    model <- lm(Median.Sale.Price ~ time_index + month_num, data = model_df)
+    
+    # Aggregate for plotting
+    plot_df <- model_df %>%
+      group_by(date, time_index, month_num) %>%
+      summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop")
     
     last_date    <- max(plot_df$date, na.rm = TRUE)
     forecast_end <- as.Date(paste0(input$pred_year, "-12-01"))
@@ -439,12 +447,6 @@ function(input, output) {
           time_index = year(date) * 12 + month(date),
           month_num  = month(date)
         )
-    }
-    
-    if (input$pred_region == "Nassau County") {
-      forecast_df$Region <- factor("Nassau County,NY")
-    } else if (input$pred_region == "New York City") {
-      forecast_df$Region <- factor("New York, NY")
     }
     
     plot_df$fitted <- predict(model, newdata = plot_df)
