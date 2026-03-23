@@ -4,11 +4,14 @@ library(dplyr)
 library(lubridate)
 library(ggplot2)
 library(tidyverse)
+library(leaflet)
+library(tigris)
 
 # --- UI ---
 ui <- page_navbar(
-  title = "New York Housing Analysis",
-  id    = "page",
+  title     = "New York Housing Analysis",
+  id        = "page",
+  underline = FALSE,
   
   nav_panel("Home",
             div(
@@ -16,7 +19,6 @@ ui <- page_navbar(
                 "position: relative; height: calc(100vh - 54px); overflow: hidden;",
                 "display: flex; align-items: center; justify-content: center;"
               ),
-              # --- Background Image ---
               tags$img(
                 src   = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Southwest_corner_of_Central_Park%2C_looking_east%2C_NYC.jpg/1280px-Southwest_corner_of_Central_Park%2C_looking_east%2C_NYC.jpg",
                 style = paste0(
@@ -26,7 +28,6 @@ ui <- page_navbar(
                   "filter: brightness(0.45);"
                 )
               ),
-              # --- Text Overlay ---
               div(
                 style = paste0(
                   "position: relative; z-index: 1;",
@@ -126,7 +127,6 @@ ui <- page_navbar(
               sidebar = sidebar(
                 title  = "Region Controls",
                 width  = 250,
-                
                 selectInput("region_metric", "Select Metric:",
                             choices = c(
                               "Median Sale Price"      = "Median.Sale.Price",
@@ -137,7 +137,6 @@ ui <- page_navbar(
                               "Avg Sale to List Ratio" = "Average.Sale.To.List"
                             )
                 ),
-                
                 selectInput("region_change", "View Change As:",
                             choices = c(
                               "Actual Value"     = "actual",
@@ -145,15 +144,12 @@ ui <- page_navbar(
                               "Year-over-Year"   = "YoY"
                             )
                 ),
-                
                 sliderInput("region_years", "Year Range:",
                             min = 2016, max = 2025, value = c(2016, 2025), sep = ""
                 ),
-                
                 hr(),
                 helpText("Compare all regions side by side. Use the ranking chart to see which region leads each metric.")
               ),
-              
               h4("Regional Scorecards — Latest Month"),
               layout_columns(
                 col_widths = c(4, 4, 4),
@@ -162,25 +158,46 @@ ui <- page_navbar(
                 uiOutput("scorecard_nyc"),
                 uiOutput("scorecard_westchester")
               ),
-              
               hr(),
-              
               h4("All Regions Over Time"),
               plotOutput("region_line_plot", height = "500px"),
-              
               hr(),
-              
               h4("Region Ranking — Most Recent Month"),
               plotOutput("region_rank_plot", height = "350px"),
-              
               hr(),
-              
               h4("Month-over-Month & Year-over-Year Changes"),
               tableOutput("region_change_table")
             )
   ),
   
-  nav_panel("Map", "Page C content"),
+  nav_panel("Map",
+            layout_sidebar(
+              fill = FALSE,
+              sidebar = sidebar(
+                title = "Map Controls",
+                width = 250,
+                selectInput("map_metric", "Select Metric:",
+                            choices = c(
+                              "Median Sale Price"      = "Median.Sale.Price",
+                              "Homes Sold"             = "Homes.Sold",
+                              "New Listings"           = "New.Listings",
+                              "Days on Market"         = "Days.on.Market",
+                              "Avg Sale to List Ratio" = "Average.Sale.To.List"
+                            )
+                ),
+                selectInput("map_change", "View Change As:",
+                            choices = c(
+                              "Actual Value"     = "actual",
+                              "Month-over-Month" = "MoM",
+                              "Year-over-Year"   = "YoY"
+                            )
+                ),
+                hr(),
+                helpText("Hover over a county to see the latest housing statistics for that region.")
+              ),
+              leafletOutput("map_plot", height = "850px")
+            )
+  ),
   
   nav_panel("Prediction Model",
             layout_sidebar(

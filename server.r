@@ -1,3 +1,25 @@
+library(leaflet)
+library(sf)
+library(tigris)
+options(tigris_use_cache = TRUE)
+
+# --- Load county shapefiles (runs once at startup) ---
+ny_counties <- counties(state = "NY", cb = TRUE, resolution = "5m") %>%
+  filter(COUNTYFP %in% c(
+    "059",  # Nassau
+    "061",  # New York (Manhattan)
+    "047",  # Kings (Brooklyn)
+    "081",  # Queens
+    "005",  # Bronx
+    "085",  # Richmond (Staten Island)
+    "119"   # Westchester
+  )) %>%
+  mutate(Region.Group = case_when(
+    COUNTYFP == "119" ~ "Westchester",
+    COUNTYFP == "059" ~ "Nassau County",
+    TRUE              ~ "New York City"
+  ))
+
 function(input, output) {
   
   # --- Load raw data once inside server ---
@@ -46,9 +68,9 @@ function(input, output) {
         Average.Sale.To.List         = clean_numeric(Average.Sale.To.List),
         Average.Sale.To.List.MoM     = clean_numeric(Average.Sale.To.List.MoM),
         Average.Sale.To.List.YoY     = clean_numeric(Average.Sale.To.List.YoY),
-        date      = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
-        year_num  = year(date),
-        month_num = month(date),
+        date       = as.Date(paste("01", Month.of.Period.End), format = "%d %B %Y"),
+        year_num   = year(date),
+        month_num  = month(date),
         time_index = year(date) * 12 + month(date),
         Region.Group = case_when(
           Region %in% c("Nassau County,NY", "Nassau County, NY metro area") ~ "Nassau County",
@@ -65,11 +87,9 @@ function(input, output) {
   
   market_df <- reactive({
     df <- clean_df() %>% filter(!is.na(Median.Sale.Price))
-    
     if (input$market_region != "All Regions") {
       df <- df %>% filter(Region.Group == region_map[input$market_region])
     }
-    
     df %>% filter(year_num >= input$market_years[1] & year_num <= input$market_years[2])
   })
   
@@ -85,7 +105,6 @@ function(input, output) {
     col     <- input$market_metric
     mom_col <- paste0(col, ".MoM")
     yoy_col <- paste0(col, ".YoY")
-    
     df %>%
       group_by(date) %>%
       summarise(
@@ -407,28 +426,170 @@ function(input, output) {
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
   
   # ============================================================
+  # MAP
+  # ============================================================
+  
+  map_data <- reactive({
+    metric <- input$map_metric
+    change <- input$map_change
+    col    <- if (change == "actual") metric else paste0(metric, ".", change)
+    
+    latest_date <- max(clean_df()$date, na.rm = TRUE)
+    
+    clean_df() %>%
+      filter(date == latest_date) %>%
+      group_by(Region.Group) %>%
+      summarise(
+        value                 = mean(.data[[col]],             na.rm = TRUE),
+        Median.Sale.Price     = mean(Median.Sale.Price,        na.rm = TRUE),
+        Median.Sale.Price.MoM = mean(Median.Sale.Price.MoM,    na.rm = TRUE),
+        Median.Sale.Price.YoY = mean(Median.Sale.Price.YoY,    na.rm = TRUE),
+        Homes.Sold            = mean(Homes.Sold,               na.rm = TRUE),
+        Days.on.Market        = mean(Days.on.Market,           na.rm = TRUE),
+        New.Listings          = mean(New.Listings,             na.rm = TRUE),
+        Average.Sale.To.List  = mean(Average.Sale.To.List,     na.rm = TRUE),
+        .groups = "drop"
+      )
+  })
+  
+  output$map_plot <- renderLeaflet({
+    df     <- map_data()
+    metric <- input$map_metric
+    change <- input$map_change
+    
+    map_sf <- ny_counties %>%
+      left_join(df, by = "Region.Group")
+    
+    pal <- colorNumeric(
+      palette  = "YlOrRd",
+      domain   = map_sf$value,
+      na.color = "#cccccc"
+    )
+    
+    val_label <- function(val) {
+      if (is.na(val)) return("N/A")
+      if (change %in% c("MoM", "YoY")) {
+        paste0(ifelse(val >= 0, "+", ""), round(val, 1), "%")
+      } else if (metric == "Median.Sale.Price") {
+        paste0("$", formatC(val / 1000, format = "f", digits = 0), "K")
+      } else if (metric == "Average.Sale.To.List") {
+        paste0(round(val * 100, 1), "%")
+      } else {
+        formatC(round(val, 0), format = "d", big.mark = ",")
+      }
+    }
+    
+    metric_name <- switch(metric,
+                          "Median.Sale.Price"    = "Median Sale Price",
+                          "Homes.Sold"           = "Homes Sold",
+                          "New.Listings"         = "New Listings",
+                          "Days.on.Market"       = "Days on Market",
+                          "Average.Sale.To.List" = "Avg Sale-to-List"
+    )
+    change_name <- switch(change,
+                          "actual" = "",
+                          "MoM"    = " (MoM)",
+                          "YoY"    = " (YoY)"
+    )
+    
+    labels <- lapply(seq_len(nrow(map_sf)), function(i) {
+      row       <- map_sf[i, ]
+      rg        <- row$Region.Group
+      price_fmt <- paste0("$", formatC(row$Median.Sale.Price / 1000, format = "f", digits = 0), "K")
+      mom_fmt   <- paste0(ifelse(row$Median.Sale.Price.MoM >= 0, "+", ""),
+                          round(row$Median.Sale.Price.MoM, 1), "%")
+      yoy_fmt   <- paste0(ifelse(row$Median.Sale.Price.YoY >= 0, "+", ""),
+                          round(row$Median.Sale.Price.YoY, 1), "%")
+      sold_fmt  <- formatC(round(row$Homes.Sold, 0), format = "d", big.mark = ",")
+      dom_fmt   <- round(row$Days.on.Market, 0)
+      list_fmt  <- formatC(round(row$New.Listings, 0), format = "d", big.mark = ",")
+      stl_fmt   <- paste0(round(row$Average.Sale.To.List * 100, 1), "%")
+      sel_fmt   <- val_label(row$value)
+      
+      htmltools::HTML(paste0(
+        "<div style='font-family: sans-serif; min-width: 200px;'>",
+        "<div style='background:#2C3E50; color:white; padding:8px 12px; border-radius:6px 6px 0 0;'>",
+        "<strong style='font-size:14px;'>", rg, "</strong></div>",
+        "<div style='padding:10px 12px; border:1px solid #ddd; border-top:none; border-radius:0 0 6px 6px;'>",
+        "<table style='width:100%; font-size:12px; border-collapse:collapse;'>",
+        "<tr style='background:#f9f9f9;'><td style='padding:4px 6px; color:#555;'>",
+        metric_name, change_name,
+        "</td><td style='padding:4px 6px; font-weight:bold; text-align:right;'>", sel_fmt, "</td></tr>",
+        "<tr><td style='padding:4px 6px; color:#555;'>Median Sale Price</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", price_fmt, "</td></tr>",
+        "<tr style='background:#f9f9f9;'><td style='padding:4px 6px; color:#555;'>MoM Change</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", mom_fmt, "</td></tr>",
+        "<tr><td style='padding:4px 6px; color:#555;'>YoY Change</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", yoy_fmt, "</td></tr>",
+        "<tr style='background:#f9f9f9;'><td style='padding:4px 6px; color:#555;'>Homes Sold</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", sold_fmt, "</td></tr>",
+        "<tr><td style='padding:4px 6px; color:#555;'>New Listings</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", list_fmt, "</td></tr>",
+        "<tr style='background:#f9f9f9;'><td style='padding:4px 6px; color:#555;'>Days on Market</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", dom_fmt, "</td></tr>",
+        "<tr><td style='padding:4px 6px; color:#555;'>Sale-to-List Ratio</td>",
+        "<td style='padding:4px 6px; text-align:right;'>", stl_fmt, "</td></tr>",
+        "</table></div></div>"
+      ))
+    })
+    
+    leaflet(map_sf) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(
+        fillColor   = ~pal(value),
+        fillOpacity = 0.75,
+        color       = "white",
+        weight      = 2,
+        highlight   = highlightOptions(
+          weight       = 3,
+          color        = "#2C3E50",
+          fillOpacity  = 0.9,
+          bringToFront = TRUE
+        ),
+        label        = lapply(labels, htmltools::HTML),
+        labelOptions = labelOptions(
+          style     = list("box-shadow" = "3px 3px 6px rgba(0,0,0,0.2)"),
+          textsize  = "13px",
+          direction = "auto"
+        )
+      ) %>%
+      addLegend(
+        pal      = pal,
+        values   = ~value,
+        title    = paste0(metric_name, change_name),
+        position = "bottomright",
+        labFormat = if (change %in% c("MoM", "YoY")) {
+          labelFormat(suffix = "%")
+        } else if (metric == "Median.Sale.Price") {
+          labelFormat(prefix = "$", suffix = "K",
+                      transform = function(x) round(x / 1000, 0))
+        } else {
+          labelFormat()
+        }
+      ) %>%
+      setView(lng = -73.7, lat = 40.85, zoom = 10) %>%
+      fitBounds(lng1 = -74.05, lat1 = 40.45, lng2 = -73.1, lat2 = 41.2)
+  })
+  
+  # ============================================================
   # PREDICTION MODEL
   # ============================================================
   
   output$prediction_plot <- renderPlot({
     req(input$pred_region, input$pred_year)
     
-    # Build model data from clean_df()
-    base <- clean_df() %>%
-      filter(!is.na(Median.Sale.Price))
+    base <- clean_df() %>% filter(!is.na(Median.Sale.Price))
     
-    if (input$pred_region == "Nassau County") {
-      model_df <- base %>% filter(Region.Group == "Nassau County")
+    model_df <- if (input$pred_region == "Nassau County") {
+      base %>% filter(Region.Group == "Nassau County")
     } else if (input$pred_region == "New York City") {
-      model_df <- base %>% filter(Region.Group == "New York City")
+      base %>% filter(Region.Group == "New York City")
     } else {
-      model_df <- base %>% filter(Region.Group == "Westchester")
+      base %>% filter(Region.Group == "Westchester")
     }
     
-    # Build model on the fly
     model <- lm(Median.Sale.Price ~ time_index + month_num, data = model_df)
     
-    # Aggregate for plotting
     plot_df <- model_df %>%
       group_by(date, time_index, month_num) %>%
       summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm = TRUE), .groups = "drop")
@@ -450,7 +611,6 @@ function(input, output) {
     }
     
     plot_df$fitted <- predict(model, newdata = plot_df)
-    
     if (nrow(forecast_df) > 0) {
       forecast_df$Median.Sale.Price <- predict(model, newdata = forecast_df)
     }
