@@ -129,35 +129,13 @@ ui <- page_navbar(
                 helpText("Inventory has no absolute value — use MoM or YoY for inventory trends."),
                 helpText("Summary statistics reflect the most recent month in the selected range.")
               ),
-              
               layout_columns(
-                value_box(
-                  title = "Current Value",
-                  value = textOutput("card_price"),
-                  style = "background-color: #A8C8E8; color: white;"
-                ),
-                value_box(
-                  title = "Month-over-Month",
-                  value = textOutput("card_mom"),
-                  style = "background-color: #7BA7D1; color: white;"
-                ),
-                value_box(
-                  title = "Year-over-Year",
-                  value = textOutput("card_yoy"),
-                  style = "background-color: #4F86BA; color: white;"
-                ),
-                value_box(
-                  title = "All-Time High",
-                  value = textOutput("card_high"),
-                  style = "background-color: #2E6699; color: white;"
-                ),
-                value_box(
-                  title = "All-Time Low",
-                  value = textOutput("card_low"),
-                  style = "background-color: #1A4670; color: white;"
-                )
+                value_box(title = "Current Value",      value = textOutput("card_price"), style = "background-color: #A8C8E8; color: white;"),
+                value_box(title = "Month-over-Month",   value = textOutput("card_mom"),   style = "background-color: #7BA7D1; color: white;"),
+                value_box(title = "Year-over-Year",     value = textOutput("card_yoy"),   style = "background-color: #4F86BA; color: white;"),
+                value_box(title = "All-Time High",      value = textOutput("card_high"),  style = "background-color: #2E6699; color: white;"),
+                value_box(title = "All-Time Low",       value = textOutput("card_low"),   style = "background-color: #1A4670; color: white;")
               ),
-              
               plotOutput("market_plot", height = "50vh")
             )
   ),
@@ -193,8 +171,7 @@ ui <- page_navbar(
               ),
               h4("Regional Scorecards — Latest Month"),
               layout_columns(
-                col_widths = c(4, 4, 4),
-                fill       = FALSE,
+                col_widths = c(4, 4, 4), fill = FALSE,
                 uiOutput("scorecard_nassau"),
                 uiOutput("scorecard_nyc"),
                 uiOutput("scorecard_westchester")
@@ -240,16 +217,77 @@ ui <- page_navbar(
             )
   ),
   
+  nav_panel("Affordability Calculator",
+            layout_sidebar(
+              fill = FALSE,
+              sidebar = sidebar(
+                title = "Your Budget",
+                width = 280,
+                numericInput("aff_income", "Annual Household Income ($):",
+                             value = 100000, min = 10000, max = 2000000, step = 5000),
+                numericInput("aff_downpayment", "Down Payment ($):",
+                             value = 50000, min = 0, max = 2000000, step = 5000),
+                sliderInput("aff_rate", "Interest Rate (%):",
+                            min = 2, max = 12, value = 7.0, step = 0.1),
+                radioButtons("aff_term", "Loan Term:",
+                             choices = c("30 Years" = 30, "15 Years" = 15), selected = 30),
+                sliderInput("aff_tax_insurance", "Monthly Tax & Insurance ($):",
+                            min = 0, max = 3000, value = 500, step = 50),
+                hr(),
+                helpText("Based on the 28% rule: your monthly mortgage payment should not exceed 28% of your gross monthly income."),
+                helpText("Comparison uses the most recent median sale price for each region.")
+              ),
+              
+              # --- Summary Cards ---
+              h4("Your Affordability Summary"),
+              layout_columns(
+                col_widths = c(3, 3, 3, 3), fill = FALSE,
+                value_box(title = "Max Home Price",     value = textOutput("aff_max_price"), style = "background-color: #1565C0; color: white;"),
+                value_box(title = "Monthly Payment",    value = textOutput("aff_monthly"),   style = "background-color: #0A1929; color: white;"),
+                value_box(title = "Loan Amount",        value = textOutput("aff_loan"),      style = "background-color: #2E6699; color: white;"),
+                value_box(title = "Max Monthly Budget", value = textOutput("aff_budget"),    style = "background-color: #4F86BA; color: white;")
+              ),
+              
+              hr(),
+              
+              # --- Best Region Recommendation ---
+              h4("Best Region For You"),
+              uiOutput("aff_best_region"),
+              
+              hr(),
+              
+              # --- Region Cards with Images ---
+              h4("Can You Afford Each Region?"),
+              layout_columns(
+                col_widths = c(4, 4, 4), fill = FALSE,
+                uiOutput("aff_card_nassau"),
+                uiOutput("aff_card_nyc"),
+                uiOutput("aff_card_westchester")
+              ),
+              
+              hr(),
+              
+              # --- Historical Chart ---
+              h4("Historical Affordability Over Time"),
+              helpText("The green shaded area shows your maximum affordable price. Lines show each region's median sale price."),
+              plotOutput("aff_history_plot", height = "500px"),
+              
+              hr(),
+              
+              # --- Sensitivity Chart ---
+              h4("How Does Changing Your Down Payment Affect Buying Power?"),
+              plotOutput("aff_sensitivity_plot", height = "400px")
+            )
+  ),
+  
   nav_panel("Prediction Model",
             layout_sidebar(
               sidebar = sidebar(
                 title = "Prediction Controls",
                 selectInput("pred_region", "Select Region:",
-                            choices = c("Nassau County", "New York City", "Westchester County")
-                ),
+                            choices = c("Nassau County", "New York City", "Westchester County")),
                 numericInput("pred_year", "Forecast Through Year:",
-                             value = 2026, min = 2016, max = 2035
-                ),
+                             value = 2026, min = 2016, max = 2035),
                 hr(),
                 helpText("The line graph shows actual prices and the model fitted and forecasted trend.")
               ),
