@@ -14,26 +14,36 @@ ny_counties <- suppressWarnings(
     ))
 )
 
-# --- Home image URLs by price tier (Unsplash free direct URLs) ---
-home_image <- function(price) {
-  if (price < 400000) {
-    # Starter home
-    "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&q=80"
-  } else if (price < 700000) {
-    # Mid-range suburban home
-    "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=600&q=80"
-  } else if (price < 1000000) {
-    # Upper mid-range home
-    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80"
-  } else {
-    # Luxury home
-    "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=600&q=80"
+# --- Region-specific images with price tier fallback ---
+home_image <- function(price, region_name = NULL) {
+  if (!is.null(region_name)) {
+    if (region_name == "Nassau County") {
+      if (price < 600000)
+        return("https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=600&q=80")
+      else
+        return("https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&q=80")
+    } else if (region_name == "New York City") {
+      if (price < 700000)
+        return("https://images.unsplash.com/photo-1555636222-cae831e670b3?w=600&q=80")
+      else
+        return("https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80")
+    } else if (region_name == "Westchester") {
+      if (price < 700000)
+        return("https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&q=80")
+      else
+        return("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80")
+    }
   }
+  # Price tier fallback
+  if (price < 400000)       "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&q=80"
+  else if (price < 700000)  "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=600&q=80"
+  else if (price < 1000000) "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80"
+  else                      "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=600&q=80"
 }
 
 home_tier_label <- function(price) {
-  if (price < 400000)      "Starter Home"
-  else if (price < 700000) "Mid-Range Home"
+  if (price < 400000)       "Starter Home"
+  else if (price < 700000)  "Mid-Range Home"
   else if (price < 1000000) "Upper Mid-Range Home"
   else                      "Luxury Home"
 }
@@ -424,7 +434,6 @@ function(input, output) {
     paste0("$", formatC(round(aff_calc()$max_monthly,0), format="d", big.mark=","), "/mo")
   })
   
-  # --- Latest region prices helper ---
   region_prices <- reactive({
     latest_date <- max(clean_df()$date, na.rm=TRUE)
     clean_df() %>%
@@ -433,22 +442,17 @@ function(input, output) {
       summarise(price = mean(Median.Sale.Price, na.rm=TRUE), .groups="drop")
   })
   
-  # --- Best Region Recommendation ---
   output$aff_best_region <- renderUI({
     max_price <- aff_calc()$max_price
     prices    <- region_prices()
-    
     affordable <- prices %>% filter(price <= max_price) %>% arrange(price)
     not_afford <- prices %>% filter(price > max_price) %>% arrange(price)
-    
     region_desc <- list(
       "Nassau County" = "Nassau County offers suburban communities with good schools and easy access to NYC via commuter rail.",
       "New York City" = "New York City offers urban living with world-class amenities, transit, and diverse neighborhoods.",
       "Westchester"   = "Westchester offers a mix of suburban towns and villages with a quieter lifestyle north of the city."
     )
-    
     if (nrow(affordable) == 0) {
-      # None affordable
       closest <- not_afford %>% slice(1)
       gap     <- closest$price - max_price
       div(style="background-color:#B71C1C; color:white; border-radius:10px; padding:20px; margin-bottom:10px;",
@@ -458,21 +462,18 @@ function(input, output) {
                         formatC(round(gap/1000,0), format="d", big.mark=","),
                         "K short of the median price. Consider increasing your down payment or income.")))
     } else {
-      best     <- affordable %>% slice(1)
-      best_rg  <- best$Region.Group
-      best_img <- home_image(best$price)
+      best      <- affordable %>% slice(1)
+      best_rg   <- best$Region.Group
+      best_img  <- home_image(best$price, best_rg)        # <-- passes region name
       best_tier <- home_tier_label(best$price)
       best_desc <- region_desc[[best_rg]]
-      
       div(
         style = "border-radius:10px; overflow:hidden; border:2px solid #1565C0; margin-bottom:10px;",
-        # Header
         div(style="background-color:#1565C0; color:white; padding:14px 20px;",
             tags$strong(style="font-size:18px;", paste0("⭐ Best Match: ", best_rg)),
             tags$span(style="font-size:13px; opacity:0.85; margin-left:12px;",
                       paste0("Median: $", formatC(round(best$price/1000,0), format="d", big.mark=","), "K — within your budget"))
         ),
-        # Body with image + text
         div(style="display:flex; background:white;",
             tags$img(src=best_img,
                      style="width:280px; height:180px; object-fit:cover; flex-shrink:0;",
@@ -491,14 +492,12 @@ function(input, output) {
     }
   })
   
-  # --- Region Cards with Images ---
   make_aff_card <- function(region_name, display_name) {
     renderUI({
-      max_price   <- aff_calc()$max_price
-      prices      <- region_prices()
+      max_price    <- aff_calc()$max_price
+      prices       <- region_prices()
       region_price <- prices %>% filter(Region.Group == region_name) %>% pull(price)
       if (length(region_price) == 0 || is.na(region_price)) return(div("No data available"))
-      
       affordable  <- max_price >= region_price
       diff        <- abs(max_price - region_price)
       diff_fmt    <- paste0("$", formatC(round(diff/1000,0), format="d", big.mark=","), "K")
@@ -511,17 +510,13 @@ function(input, output) {
         paste0("Within budget by ", diff_fmt, " (", pct_diff, "% below median)")
       else
         paste0("Over budget by ", diff_fmt, " (", pct_diff, "% above median)")
-      
-      img_url  <- home_image(region_price)
+      img_url  <- home_image(region_price, region_name)   # <-- passes region name
       tier_lbl <- home_tier_label(region_price)
-      
       div(
         style = paste0("border-radius:10px; overflow:hidden; border:2px solid ", bg_color, ";"),
-        # Image
         tags$img(src=img_url,
                  style="width:100%; height:160px; object-fit:cover; display:block;",
                  onerror="this.style.display='none'"),
-        # Info block
         div(style=paste0("background-color:", bg_color, "; color:white; padding:14px; text-align:center;"),
             tags$strong(style="font-size:15px;", display_name),
             tags$div(style="font-size:22px; font-weight:bold; margin:6px 0;",
@@ -540,23 +535,19 @@ function(input, output) {
   output$aff_card_nyc         <- make_aff_card("New York City", "New York City")
   output$aff_card_westchester <- make_aff_card("Westchester",   "Westchester County")
   
-  # --- Historical Affordability Chart (fixed) ---
   output$aff_history_plot <- renderPlot({
     req(aff_calc()$max_price > 0)
     calc      <- aff_calc()
     max_price <- calc$max_price
-    
     df <- clean_df() %>%
       filter(!is.na(Median.Sale.Price)) %>%
       group_by(date, Region.Group) %>%
       summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm=TRUE), .groups="drop") %>%
       filter(Region.Group != "Other")
-    
     aff_colors <- c("Nassau County"="#0A1929","New York City"="#1565C0","Westchester"="#A8C8E8")
     date_min <- min(df$date)
     date_max <- max(df$date)
     y_max    <- max(max(df$Median.Sale.Price, na.rm=TRUE), max_price) * 1.1
-    
     ggplot(df, aes(x=date, y=Median.Sale.Price, color=Region.Group)) +
       annotate("rect", xmin=date_min, xmax=date_max, ymin=0, ymax=max_price,
                fill="#1B5E20", alpha=0.10) +
@@ -574,7 +565,6 @@ function(input, output) {
       theme(plot.title=element_text(face="bold"), legend.position="bottom")
   })
   
-  # --- Sensitivity Chart ---
   output$aff_sensitivity_plot <- renderPlot({
     req(aff_calc()$max_price > 0)
     rate    <- input$aff_rate / 100 / 12
@@ -585,28 +575,23 @@ function(input, output) {
     max_mortgage <- max(max_monthly - tax_ins, 0)
     max_loan     <- if (rate == 0) max_mortgage * term else
       max_mortgage * (1 - (1 + rate)^(-term)) / rate
-    
     down_seq   <- seq(0, 500000, by=10000)
     max_prices <- down_seq + max_loan
     sens_df    <- data.frame(down=down_seq, max_price=max_prices)
-    
-    prices      <- region_prices()
-    aff_colors  <- c("Nassau County"="#0A1929","New York City"="#1565C0","Westchester"="#A8C8E8")
-    
+    prices     <- region_prices()
+    aff_colors <- c("Nassau County"="#0A1929","New York City"="#1565C0","Westchester"="#A8C8E8")
     p <- ggplot(sens_df, aes(x=down, y=max_price)) +
       geom_line(color="#1565C0", linewidth=1.5) +
       geom_vline(xintercept=input$aff_downpayment, linetype="dashed", color="gray40") +
       annotate("text", x=input$aff_downpayment, y=max(sens_df$max_price)*0.98,
                label=paste0("Current: $", formatC(round(input$aff_downpayment/1000,0), format="d", big.mark=","), "K down"),
                hjust=-0.1, size=3.5, color="gray40")
-    
     for (i in seq_len(nrow(prices))) {
       rg <- prices$Region.Group[i]; price <- prices$price[i]; col <- aff_colors[rg]
       p <- p +
         geom_hline(yintercept=price, linetype="dotted", color=col, linewidth=0.8) +
         annotate("text", x=max(down_seq)*0.98, y=price*1.02, label=rg, hjust=1, size=3, color=col)
     }
-    
     p + scale_x_continuous(labels=scales::dollar_format(scale=0.001, suffix="K")) +
       scale_y_continuous(labels=scales::dollar_format(scale=0.001, suffix="K")) +
       labs(title="How Your Down Payment Affects Maximum Home Price",
