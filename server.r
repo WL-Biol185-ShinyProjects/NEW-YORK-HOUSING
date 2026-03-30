@@ -845,7 +845,7 @@ function(input, output, session) {
     req(aff_calc()$max_price > 0)
     max_price <- aff_calc()$max_price
     df <- clean_df() %>%
-      filter(!is.na(Median.Sale.Price)) %>%
+      filter(!is.na(Median.Sale.Price), year_num >= 2016) %>%
       group_by(date, Region.Group) %>%
       summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm=TRUE), .groups="drop") %>%
       filter(Region.Group != "Other")
