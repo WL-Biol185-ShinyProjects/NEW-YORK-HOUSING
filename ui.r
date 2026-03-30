@@ -22,30 +22,30 @@ ui <- page_navbar(
   .value-box, table, .shiny-text-output {
     font-family: 'DM Serif Display', serif !important;
   }
-
+ 
   /* Navbar */
   .navbar {
     background-color: #0A1929 !important;
     border-bottom: 1px solid #1565C0 !important;
   }
-
+ 
   /* Navbar text and links */
   .navbar-nav .nav-link, .navbar-brand {
     color: white !important;
   }
-
+ 
   .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active {
     color: #A8C8E8 !important;
     background-color: #1565C0 !important;
     border-radius: 6px;
   }
-
+ 
   /* Sidebar */
   .sidebar, .bslib-sidebar-panel {
     background-color: #0A1929 !important;
     color: white !important;
   }
-
+ 
   /* Sidebar labels and text */
   .sidebar label, .sidebar .help-block, .sidebar p,
   .sidebar .control-label, .sidebar h4, .sidebar h5 {
@@ -54,6 +54,9 @@ ui <- page_navbar(
     "))
   ),
   
+  # ============================================================
+  # HOME TAB
+  # ============================================================
   nav_panel("Home",
             div(
               style = paste0(
@@ -94,6 +97,9 @@ ui <- page_navbar(
             )
   ),
   
+  # ============================================================
+  # MARKET OVERVIEW TAB
+  # ============================================================
   nav_panel("Market Overview",
             layout_sidebar(
               sidebar = sidebar(
@@ -140,6 +146,9 @@ ui <- page_navbar(
             )
   ),
   
+  # ============================================================
+  # REGION OVERVIEW TAB
+  # ============================================================
   nav_panel("Region Overview",
             layout_sidebar(
               fill = FALSE,
@@ -188,6 +197,9 @@ ui <- page_navbar(
             )
   ),
   
+  # ============================================================
+  # MAP TAB
+  # ============================================================
   nav_panel("Map",
             layout_sidebar(
               fill = FALSE,
@@ -217,6 +229,9 @@ ui <- page_navbar(
             )
   ),
   
+  # ============================================================
+  # AFFORDABILITY CALCULATOR TAB
+  # ============================================================
   nav_panel("Affordability Calculator",
             layout_sidebar(
               fill = FALSE,
@@ -256,6 +271,13 @@ ui <- page_navbar(
               
               hr(),
               
+              # --- Score Breakdown Chart ---
+              h4("Region Score Breakdown"),
+              helpText("Composite score considers budget fit, market stability, competitiveness, and inventory health."),
+              plotOutput("aff_score_plot", height = "350px"),
+              
+              hr(),
+              
               # --- Region Cards with Images ---
               h4("Can You Afford Each Region?"),
               layout_columns(
@@ -280,6 +302,9 @@ ui <- page_navbar(
             )
   ),
   
+  # ============================================================
+  # PREDICTION MODEL TAB
+  # ============================================================
   nav_panel("Prediction Model",
             layout_sidebar(
               sidebar = sidebar(

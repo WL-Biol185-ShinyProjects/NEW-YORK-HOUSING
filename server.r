@@ -397,7 +397,7 @@ function(input, output) {
   })
   
   # ============================================================
-  # AFFORDABILITY CALCULATOR
+  # AFFORDABILITY CALCULATOR (IMPROVED ALGORITHM)
   # ============================================================
   
   aff_calc <- reactive({
@@ -434,29 +434,130 @@ function(input, output) {
     paste0("$", formatC(round(aff_calc()$max_monthly,0), format="d", big.mark=","), "/mo")
   })
   
+  # --- Enriched region prices: pulls market health metrics for scoring ---
   region_prices <- reactive({
     latest_date <- max(clean_df()$date, na.rm=TRUE)
     clean_df() %>%
       filter(date == latest_date, Region.Group != "Other") %>%
       group_by(Region.Group) %>%
-      summarise(price = mean(Median.Sale.Price, na.rm=TRUE), .groups="drop")
+      summarise(
+        price             = mean(Median.Sale.Price, na.rm=TRUE),
+        yoy_change        = mean(Median.Sale.Price.YoY, na.rm=TRUE),
+        days_on_market    = mean(Days.on.Market, na.rm=TRUE),
+        sale_to_list      = mean(Average.Sale.To.List, na.rm=TRUE),
+        homes_sold        = mean(Homes.Sold, na.rm=TRUE),
+        new_listings      = mean(New.Listings, na.rm=TRUE),
+        inventory_mom     = mean(Inventory.MoM, na.rm=TRUE),
+        .groups="drop"
+      )
   })
   
+  # --- IMPROVED: Composite scoring for best region ---
+  # Scores each affordable region on 4 dimensions (0-100 total)
+  # so different user inputs produce different recommendations
+  best_region_scored <- reactive({
+    max_price <- aff_calc()$max_price
+    prices    <- region_prices()
+    
+    # Score ALL regions (even unaffordable ones get scored for the chart)
+    scored <- prices %>%
+      mutate(
+        is_affordable = price <= max_price,
+        
+        # 1. Budget Fit Score (0-30 pts)
+        #    Rewards regions that USE your budget well (85-100% of max)
+        #    instead of always picking the cheapest
+        budget_ratio   = price / max_price,
+        headroom_score = case_when(
+          !is_affordable                          ~ 0,
+          budget_ratio >= 0.85 & budget_ratio <= 1.0 ~ 30,  # Sweet spot
+          budget_ratio >= 0.70 & budget_ratio < 0.85 ~ 22,  # Good
+          budget_ratio >= 0.50 & budget_ratio < 0.70 ~ 14,  # Lots of room
+          TRUE ~ 8                                            # Very cheap vs budget
+        ),
+        
+        # 2. Market Stability Score (0-25 pts)
+        #    Prefers moderate/stable YoY growth; penalizes overheating
+        momentum_score = case_when(
+          yoy_change >= -2 & yoy_change <= 3   ~ 25,  # Stable
+          yoy_change > 3  & yoy_change <= 6    ~ 20,  # Moderate growth
+          yoy_change > 6  & yoy_change <= 10   ~ 12,  # Hot
+          yoy_change > 10                       ~ 5,   # Overheating
+          yoy_change < -2 & yoy_change >= -5   ~ 18,  # Slight dip = opportunity
+          TRUE ~ 8                                      # Big decline
+        ),
+        
+        # 3. Buyer Competitiveness Score (0-25 pts)
+        #    More days on market + sale-to-list <= 100% = better for buyers
+        compete_score = case_when(
+          days_on_market >= 60 & sale_to_list <= 98 ~ 25,
+          days_on_market >= 40 & sale_to_list <= 100 ~ 20,
+          days_on_market >= 25 & sale_to_list <= 102 ~ 14,
+          days_on_market >= 15 & sale_to_list <= 104 ~ 8,
+          TRUE ~ 4
+        ),
+        
+        # 4. Inventory Health Score (0-20 pts)
+        #    Growing inventory = more options for buyers
+        inventory_score = case_when(
+          inventory_mom > 5   ~ 20,
+          inventory_mom > 2   ~ 16,
+          inventory_mom > 0   ~ 12,
+          inventory_mom > -3  ~ 8,
+          TRUE ~ 4
+        ),
+        
+        # Total composite score (affordable regions only get full score)
+        total_score = ifelse(is_affordable,
+                             headroom_score + momentum_score + compete_score + inventory_score,
+                             momentum_score + compete_score + inventory_score)  # partial score for chart
+      ) %>%
+      arrange(desc(is_affordable), desc(total_score))
+    
+    scored
+  })
+  
+  # --- Helper: generate human-readable reason for recommendation ---
+  score_reason <- function(row) {
+    reasons <- c()
+    if (row$headroom_score >= 22) reasons <- c(reasons, "Great use of your budget")
+    else if (row$headroom_score >= 14) reasons <- c(reasons, "Comfortable budget fit")
+    else if (row$headroom_score > 0)   reasons <- c(reasons, "Well below your budget")
+    
+    if (row$momentum_score >= 20) reasons <- c(reasons, "Stable price trends")
+    else if (row$momentum_score <= 12) reasons <- c(reasons, "Rapidly rising prices")
+    
+    if (row$compete_score >= 20)  reasons <- c(reasons, "Buyer-friendly market")
+    else if (row$compete_score <= 8) reasons <- c(reasons, "Competitive market")
+    
+    if (row$inventory_score >= 16) reasons <- c(reasons, "Growing inventory")
+    else if (row$inventory_score <= 8) reasons <- c(reasons, "Tight inventory")
+    
+    if (length(reasons) == 0) reasons <- c("Balanced across all factors")
+    paste(reasons, collapse = " · ")
+  }
+  
+  # --- Best Region Recommendation Card ---
   output$aff_best_region <- renderUI({
     max_price <- aff_calc()$max_price
     prices    <- region_prices()
-    affordable <- prices %>% filter(price <= max_price) %>% arrange(price)
-    not_afford <- prices %>% filter(price > max_price) %>% arrange(price)
+    scored    <- best_region_scored()
+    
     region_desc <- list(
       "Nassau County" = "Nassau County offers suburban communities with good schools and easy access to NYC via commuter rail.",
       "New York City" = "New York City offers urban living with world-class amenities, transit, and diverse neighborhoods.",
       "Westchester"   = "Westchester offers a mix of suburban towns and villages with a quieter lifestyle north of the city."
     )
+    
+    affordable <- scored %>% filter(is_affordable)
+    
     if (nrow(affordable) == 0) {
-      closest <- not_afford %>% slice(1)
+      # No affordable regions — show closest option
+      closest <- scored %>% arrange(price) %>% slice(1)
       gap     <- closest$price - max_price
       div(style="background-color:#B71C1C; color:white; border-radius:10px; padding:20px; margin-bottom:10px;",
-          tags$strong(style="font-size:16px;", "⚠ No regions are currently within your budget"),
+          tags$strong(style="font-size:16px;", paste0(
+            "\u26A0 No regions are currently within your budget")),
           tags$p(style="margin:8px 0 0;",
                  paste0("Your closest option is ", closest$Region.Group, " — you are $",
                         formatC(round(gap/1000,0), format="d", big.mark=","),
@@ -464,13 +565,26 @@ function(input, output) {
     } else {
       best      <- affordable %>% slice(1)
       best_rg   <- best$Region.Group
-      best_img  <- home_image(best$price, best_rg)        # <-- passes region name
+      best_img  <- home_image(best$price, best_rg)
       best_tier <- home_tier_label(best$price)
       best_desc <- region_desc[[best_rg]]
+      why_text  <- score_reason(best)
+      
+      score_detail <- paste0(
+        "Score: ", round(best$total_score), "/100 — ",
+        "Budget Fit (", best$headroom_score, "/30) · ",
+        "Stability (", best$momentum_score, "/25) · ",
+        "Competitiveness (", best$compete_score, "/25) · ",
+        "Inventory (", best$inventory_score, "/20)"
+      )
+      
+      runners <- affordable %>% slice(-1)
+      
       div(
         style = "border-radius:10px; overflow:hidden; border:2px solid #1565C0; margin-bottom:10px;",
         div(style="background-color:#1565C0; color:white; padding:14px 20px;",
-            tags$strong(style="font-size:18px;", paste0("⭐ Best Match: ", best_rg)),
+            tags$strong(style="font-size:18px;", paste0(
+              "\u2B50 Best Match: ", best_rg)),
             tags$span(style="font-size:13px; opacity:0.85; margin-left:12px;",
                       paste0("Median: $", formatC(round(best$price/1000,0), format="d", big.mark=","), "K — within your budget"))
         ),
@@ -480,24 +594,90 @@ function(input, output) {
                      onerror="this.style.display='none'"),
             div(style="padding:16px; flex:1;",
                 tags$p(style="margin:0 0 8px; color:#333; font-size:14px;", best_desc),
+                tags$p(style="margin:0 0 6px; color:#1565C0; font-size:13px; font-weight:bold;",
+                       paste0("Why this region: ", why_text)),
+                tags$p(style="margin:0 0 6px; color:#555; font-size:12px; font-style:italic;",
+                       score_detail),
                 tags$p(style="margin:0; color:#555; font-size:13px;",
                        paste0("At the current median price, you'd be looking at a ", best_tier, " in this area. ",
-                              "Your budget of $", formatC(round(aff_calc()$max_price/1000,0), format="d", big.mark=","),
-                              "K gives you ", ifelse(aff_calc()$max_price >= best$price,
-                                                     paste0("$", formatC(round((aff_calc()$max_price - best$price)/1000,0), format="d", big.mark=","), "K of headroom."),
+                              "Your budget of $", formatC(round(max_price/1000,0), format="d", big.mark=","),
+                              "K gives you ", ifelse(max_price >= best$price,
+                                                     paste0("$", formatC(round((max_price - best$price)/1000,0), format="d", big.mark=","), "K of headroom."),
                                                      "limited options at the median price.")))
             )
-        )
+        ),
+        # Runner-up regions
+        if (nrow(runners) > 0) {
+          div(style="background:#f8f9fa; padding:12px 20px; border-top:1px solid #ddd;",
+              tags$strong(style="font-size:13px; color:#333;", "Also affordable:"),
+              lapply(seq_len(nrow(runners)), function(i) {
+                r <- runners[i,]
+                tags$div(style="font-size:12px; color:#555; margin-top:4px; margin-left:12px;",
+                         paste0(r$Region.Group,
+                                " — Score: ", round(r$total_score), "/100",
+                                " · Median: $", formatC(round(r$price/1000,0), format="d", big.mark=","), "K",
+                                " · ", score_reason(r)))
+              })
+          )
+        }
       )
     }
   })
   
+  # --- Score Breakdown Bar Chart ---
+  output$aff_score_plot <- renderPlot({
+    scored <- best_region_scored()
+    if (is.null(scored) || nrow(scored) == 0) {
+      return(ggplot() + annotate("text", x=0.5, y=0.5, label="Adjust inputs to see scores", size=6, color="gray50") + theme_void())
+    }
+    
+    plot_data <- scored %>%
+      select(Region.Group, is_affordable, headroom_score, momentum_score, compete_score, inventory_score) %>%
+      pivot_longer(cols = c(headroom_score, momentum_score, compete_score, inventory_score),
+                   names_to = "category", values_to = "score") %>%
+      mutate(
+        category = case_when(
+          category == "headroom_score"  ~ "Budget Fit (30)",
+          category == "momentum_score"  ~ "Stability (25)",
+          category == "compete_score"   ~ "Competitiveness (25)",
+          category == "inventory_score" ~ "Inventory (20)"
+        ),
+        category = factor(category, levels = c("Inventory (20)", "Competitiveness (25)",
+                                               "Stability (25)", "Budget Fit (30)")),
+        label = ifelse(is_affordable, Region.Group, paste0(Region.Group, " *"))
+      )
+    
+    score_colors <- c("Budget Fit (30)" = "#1565C0", "Stability (25)" = "#2E6699",
+                      "Competitiveness (25)" = "#4F86BA", "Inventory (20)" = "#A8C8E8")
+    
+    totals <- scored %>%
+      mutate(label = ifelse(is_affordable, Region.Group, paste0(Region.Group, " *"))) %>%
+      select(label, total_score)
+    
+    ggplot(plot_data, aes(x = reorder(label, -score, FUN = sum), y = score, fill = category)) +
+      geom_col(width = 0.6) +
+      geom_text(data = totals, aes(x = label, y = total_score, label = paste0(round(total_score), "/100"), fill = NULL),
+                vjust = -0.5, size = 4, fontface = "bold", color = "#333") +
+      scale_fill_manual(values = score_colors) +
+      scale_y_continuous(limits = c(0, 110), expand = expansion(mult = c(0, 0.05))) +
+      labs(title = "Region Scores — Why We Recommend What We Do",
+           subtitle = "Higher score = better fit for you as a buyer (* = not affordable)",
+           x = NULL, y = "Score", fill = "Category") +
+      theme_minimal(base_size = 13) +
+      theme(plot.title = element_text(face = "bold"),
+            legend.position = "bottom",
+            panel.grid.major.x = element_blank())
+  })
+  
+  # --- Per-Region Affordability Cards ---
   make_aff_card <- function(region_name, display_name) {
     renderUI({
       max_price    <- aff_calc()$max_price
       prices       <- region_prices()
+      scored       <- best_region_scored()
       region_price <- prices %>% filter(Region.Group == region_name) %>% pull(price)
       if (length(region_price) == 0 || is.na(region_price)) return(div("No data available"))
+      
       affordable  <- max_price >= region_price
       diff        <- abs(max_price - region_price)
       diff_fmt    <- paste0("$", formatC(round(diff/1000,0), format="d", big.mark=","), "K")
@@ -505,13 +685,19 @@ function(input, output) {
       max_fmt     <- paste0("$", formatC(round(max_price/1000,0), format="d", big.mark=","), "K")
       pct_diff    <- round(abs(max_price - region_price) / region_price * 100, 1)
       bg_color    <- if (affordable) "#1B5E20" else "#B71C1C"
-      status_icon <- if (affordable) "✓" else "✗"
+      status_icon <- if (affordable) "\u2713" else "\u2717"
       status_text <- if (affordable)
         paste0("Within budget by ", diff_fmt, " (", pct_diff, "% below median)")
       else
         paste0("Over budget by ", diff_fmt, " (", pct_diff, "% above median)")
-      img_url  <- home_image(region_price, region_name)   # <-- passes region name
+      
+      # Pull score for this region
+      region_score <- scored %>% filter(Region.Group == region_name)
+      score_text <- if (nrow(region_score) > 0) paste0("Score: ", round(region_score$total_score[1]), "/100") else ""
+      
+      img_url  <- home_image(region_price, region_name)
       tier_lbl <- home_tier_label(region_price)
+      
       div(
         style = paste0("border-radius:10px; overflow:hidden; border:2px solid ", bg_color, ";"),
         tags$img(src=img_url,
@@ -524,6 +710,7 @@ function(input, output) {
             tags$div(style="font-size:12px; opacity:0.9; margin:3px 0;", paste0("Median: ", price_fmt)),
             tags$div(style="font-size:12px; opacity:0.9; margin:3px 0;", paste0("Your Max: ", max_fmt)),
             tags$div(style="font-size:11px; opacity:0.8; margin-top:6px;", status_text),
+            if (nchar(score_text) > 0) tags$div(style="font-size:11px; opacity:0.85; margin-top:4px; font-weight:bold;", score_text),
             tags$div(style="font-size:11px; opacity:0.75; margin-top:4px; font-style:italic;",
                      paste0("Typical home at median: ", tier_lbl))
         )
@@ -535,6 +722,7 @@ function(input, output) {
   output$aff_card_nyc         <- make_aff_card("New York City", "New York City")
   output$aff_card_westchester <- make_aff_card("Westchester",   "Westchester County")
   
+  # --- Historical Affordability Plot ---
   output$aff_history_plot <- renderPlot({
     req(aff_calc()$max_price > 0)
     calc      <- aff_calc()
@@ -565,6 +753,7 @@ function(input, output) {
       theme(plot.title=element_text(face="bold"), legend.position="bottom")
   })
   
+  # --- Sensitivity Plot ---
   output$aff_sensitivity_plot <- renderPlot({
     req(aff_calc()$max_price > 0)
     rate    <- input$aff_rate / 100 / 12
