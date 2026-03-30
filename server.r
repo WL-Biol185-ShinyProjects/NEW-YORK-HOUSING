@@ -1,6 +1,7 @@
 library(leaflet)
 library(sf)
 library(tigris)
+library(shinyjs)
 options(tigris_use_cache = TRUE)
 
 # --- Load county shapefiles (runs once at startup) ---
@@ -34,7 +35,6 @@ home_image <- function(price, region_name = NULL) {
         return("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80")
     }
   }
-  # Price tier fallback
   if (price < 400000)       "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&q=80"
   else if (price < 700000)  "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=600&q=80"
   else if (price < 1000000) "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80"
@@ -48,7 +48,7 @@ home_tier_label <- function(price) {
   else                      "Luxury Home"
 }
 
-function(input, output) {
+function(input, output, session) {
   
   nychousing <- read.csv("nychousing.csv")
   
@@ -103,6 +103,99 @@ function(input, output) {
           TRUE ~ "Other"
         )
       )
+  })
+  
+  # ============================================================
+  # MODAL QUESTIONNAIRE LOGIC
+  # ============================================================
+  
+  profile_complete <- reactiveVal(FALSE)
+  
+  # Show modal when Affordability tab is first visited
+  observeEvent(input$page, {
+    if (input$page == "Affordability Calculator" && !profile_complete()) {
+      session$sendCustomMessage("show_profile_modal", list())
+    }
+  })
+  
+  # "See My Results" button — validate then close modal
+  # Button ID in ui.R is "profile_submit" — must match here
+  observeEvent(input$profile_submit, {
+    all_answered <- !is.null(input$profile_lifestage) && nchar(input$profile_lifestage) > 0 &&
+      !is.null(input$profile_urban)     && nchar(input$profile_urban) > 0     &&
+      !is.null(input$profile_schools)   && nchar(input$profile_schools) > 0   &&
+      !is.null(input$profile_nightlife) && nchar(input$profile_nightlife) > 0 &&
+      !is.null(input$profile_transit)   && nchar(input$profile_transit) > 0
+    
+    if (!all_answered) {
+      session$sendCustomMessage("toggle_modal_error", list(show = TRUE))
+    } else {
+      session$sendCustomMessage("toggle_modal_error", list(show = FALSE))
+      session$sendCustomMessage("hide_profile_modal", list())
+      profile_complete(TRUE)
+    }
+  })
+  
+  # "Edit My Profile" button — reopen modal
+  observeEvent(input$profile_edit_btn, {
+    session$sendCustomMessage("show_profile_modal", list())
+  })
+  
+  # --- Profile summary shown in sidebar after completion ---
+  output$profile_summary_sidebar <- renderUI({
+    req(profile_complete())
+    
+    lifestage_label <- switch(input$profile_lifestage,
+                              young_pro   = "Young Professional",
+                              family      = "Growing Family",
+                              established = "Empty Nester",
+                              retiree     = "Retiree",
+                              "—"
+    )
+    urban_label <- switch(input$profile_urban,
+                          urban    = "Urban",
+                          suburban = "Suburban",
+                          flexible = "Flexible",
+                          "—"
+    )
+    transit_label <- switch(input$profile_transit,
+                            high   = "High transit reliance",
+                            medium = "Some transit use",
+                            low    = "Car-dependent",
+                            "—"
+    )
+    schools_label <- switch(input$profile_schools,
+                            high   = "Schools: top priority",
+                            medium = "Schools: nice to have",
+                            low    = "Schools: not a priority",
+                            "—"
+    )
+    nightlife_label <- switch(input$profile_nightlife,
+                              high   = "Nightlife: essential",
+                              medium = "Nightlife: nice to have",
+                              low    = "Nightlife: not a priority",
+                              "—"
+    )
+    
+    div(class = "profile-summary-box",
+        tags$div(style = "font-size:11px; opacity:0.75; margin-bottom:4px;", "YOUR PROFILE"),
+        tags$div(tags$span(lifestage_label), style = "margin-bottom:2px;"),
+        tags$div(paste0(urban_label, " \u00b7 ", transit_label)),
+        tags$div(schools_label),
+        tags$div(nightlife_label)
+    )
+  })
+  
+  # Edit button — only rendered after profile is complete
+  output$profile_edit_btn_ui <- renderUI({
+    req(profile_complete())
+    actionButton("profile_edit_btn", "\u270f Edit My Profile",
+                 style = paste0(
+                   "width:100%; background:#1565C0; color:white;",
+                   "border:none; border-radius:6px; padding:8px; font-size:13px;",
+                   "font-family:'DM Serif Display',serif; cursor:pointer; margin-top:4px;"
+                 )
+    )
   })
   
   # ============================================================
@@ -168,7 +261,7 @@ function(input, output) {
     df <- market_df(); vals <- df[[metric]]
     if (all(is.na(vals))) return("N/A")
     idx <- which.max(vals)
-    paste0(format_val(vals[idx], metric), " — ", format(df$date[idx], "%b %Y"))
+    paste0(format_val(vals[idx], metric), " \u2014 ", format(df$date[idx], "%b %Y"))
   })
   output$card_low <- renderText({
     metric <- input$market_metric
@@ -176,7 +269,7 @@ function(input, output) {
     df <- market_df(); vals <- df[[metric]]
     if (all(is.na(vals))) return("N/A")
     idx <- which.min(vals)
-    paste0(format_val(vals[idx], metric), " — ", format(df$date[idx], "%b %Y"))
+    paste0(format_val(vals[idx], metric), " \u2014 ", format(df$date[idx], "%b %Y"))
   })
   
   output$market_plot <- renderPlot({
@@ -290,7 +383,7 @@ function(input, output) {
     else scale_y_continuous(labels=scales::comma)
     ggplot(df, aes(x=date, y=value, color=Region.Group)) + geom_line(linewidth=1) +
       scale_color_manual(values=region_colors) + y_scale +
-      labs(title=paste("All Regions —",y_label), x="Date", y=y_label, color="Region") +
+      labs(title=paste("All Regions \u2014",y_label), x="Date", y=y_label, color="Region") +
       theme_minimal(base_size=13) + theme(plot.title=element_text(face="bold"), legend.position="bottom")
   })
   
@@ -303,7 +396,7 @@ function(input, output) {
       geom_col(show.legend=FALSE) + geom_text(aes(label=bar_label(value)), hjust=-0.1, size=3.5) +
       coord_flip() + scale_fill_manual(values=region_colors) +
       scale_y_continuous(expand=expansion(mult=c(0,0.15))) +
-      labs(title=paste("Region Ranking —",metric), x=NULL, y=NULL) +
+      labs(title=paste("Region Ranking \u2014",metric), x=NULL, y=NULL) +
       theme_minimal(base_size=13) + theme(plot.title=element_text(face="bold"))
   })
   
@@ -397,7 +490,7 @@ function(input, output) {
   })
   
   # ============================================================
-  # AFFORDABILITY CALCULATOR (IMPROVED ALGORITHM)
+  # AFFORDABILITY CALCULATOR
   # ============================================================
   
   aff_calc <- reactive({
@@ -434,132 +527,174 @@ function(input, output) {
     paste0("$", formatC(round(aff_calc()$max_monthly,0), format="d", big.mark=","), "/mo")
   })
   
-  # --- Enriched region prices: pulls market health metrics for scoring ---
+  # --- Region market health data ---
   region_prices <- reactive({
     latest_date <- max(clean_df()$date, na.rm=TRUE)
     clean_df() %>%
       filter(date == latest_date, Region.Group != "Other") %>%
       group_by(Region.Group) %>%
       summarise(
-        price             = mean(Median.Sale.Price, na.rm=TRUE),
-        yoy_change        = mean(Median.Sale.Price.YoY, na.rm=TRUE),
-        days_on_market    = mean(Days.on.Market, na.rm=TRUE),
-        sale_to_list      = mean(Average.Sale.To.List, na.rm=TRUE),
-        homes_sold        = mean(Homes.Sold, na.rm=TRUE),
-        new_listings      = mean(New.Listings, na.rm=TRUE),
-        inventory_mom     = mean(Inventory.MoM, na.rm=TRUE),
+        price          = mean(Median.Sale.Price, na.rm=TRUE),
+        yoy_change     = mean(Median.Sale.Price.YoY, na.rm=TRUE),
+        days_on_market = mean(Days.on.Market, na.rm=TRUE),
+        sale_to_list   = mean(Average.Sale.To.List, na.rm=TRUE),
+        homes_sold     = mean(Homes.Sold, na.rm=TRUE),
+        new_listings   = mean(New.Listings, na.rm=TRUE),
+        inventory_mom  = mean(Inventory.MoM, na.rm=TRUE),
         .groups="drop"
       )
   })
   
-  # --- IMPROVED: Composite scoring for best region ---
-  # Scores each affordable region on 4 dimensions (0-100 total)
-  # so different user inputs produce different recommendations
+  # ============================================================
+  # LIFESTYLE BONUS SCORES
+  # ============================================================
+  
+  lifestyle_bonus <- reactive({
+    req(profile_complete(),
+        input$profile_lifestage,
+        input$profile_urban,
+        input$profile_schools,
+        input$profile_nightlife,
+        input$profile_transit)
+    
+    ls  <- input$profile_lifestage
+    urb <- input$profile_urban
+    sch <- input$profile_schools
+    nit <- input$profile_nightlife
+    tra <- input$profile_transit
+    
+    scores <- list("Nassau County" = 0, "New York City" = 0, "Westchester" = 0)
+    
+    # Life Stage (0-8 pts)
+    scores <- switch(ls,
+                     young_pro = { scores[["New York City"]] <- scores[["New York City"]] + 8; scores[["Westchester"]] <- scores[["Westchester"]] + 4; scores[["Nassau County"]] <- scores[["Nassau County"]] + 2; scores },
+                     family    = { scores[["Nassau County"]] <- scores[["Nassau County"]] + 8; scores[["Westchester"]] <- scores[["Westchester"]] + 6; scores[["New York City"]] <- scores[["New York City"]] + 2; scores },
+                     established = { scores[["Westchester"]] <- scores[["Westchester"]] + 8; scores[["Nassau County"]] <- scores[["Nassau County"]] + 6; scores[["New York City"]] <- scores[["New York City"]] + 3; scores },
+                     retiree   = { scores[["Westchester"]] <- scores[["Westchester"]] + 7; scores[["Nassau County"]] <- scores[["Nassau County"]] + 7; scores[["New York City"]] <- scores[["New York City"]] + 3; scores },
+                     scores
+    )
+    
+    # Urban vs Suburban (0-8 pts)
+    scores <- switch(urb,
+                     urban    = { scores[["New York City"]] <- scores[["New York City"]] + 8; scores[["Westchester"]] <- scores[["Westchester"]] + 2; scores[["Nassau County"]] <- scores[["Nassau County"]] + 1; scores },
+                     suburban = { scores[["Nassau County"]] <- scores[["Nassau County"]] + 8; scores[["Westchester"]] <- scores[["Westchester"]] + 7; scores[["New York City"]] <- scores[["New York City"]] + 1; scores },
+                     flexible = { scores[["New York City"]] <- scores[["New York City"]] + 4; scores[["Nassau County"]] <- scores[["Nassau County"]] + 4; scores[["Westchester"]] <- scores[["Westchester"]] + 5; scores },
+                     scores
+    )
+    
+    # Schools (0-6 pts)
+    scores <- switch(sch,
+                     high   = { scores[["Nassau County"]] <- scores[["Nassau County"]] + 6; scores[["Westchester"]] <- scores[["Westchester"]] + 5; scores[["New York City"]] <- scores[["New York City"]] + 2; scores },
+                     medium = { scores[["Nassau County"]] <- scores[["Nassau County"]] + 4; scores[["Westchester"]] <- scores[["Westchester"]] + 4; scores[["New York City"]] <- scores[["New York City"]] + 3; scores },
+                     low    = { scores[["New York City"]] <- scores[["New York City"]] + 3; scores[["Nassau County"]] <- scores[["Nassau County"]] + 3; scores[["Westchester"]] <- scores[["Westchester"]] + 3; scores },
+                     scores
+    )
+    
+    # Nightlife (0-4 pts)
+    scores <- switch(nit,
+                     high   = { scores[["New York City"]] <- scores[["New York City"]] + 4; scores[["Westchester"]] <- scores[["Westchester"]] + 2; scores[["Nassau County"]] <- scores[["Nassau County"]] + 1; scores },
+                     medium = { scores[["New York City"]] <- scores[["New York City"]] + 3; scores[["Nassau County"]] <- scores[["Nassau County"]] + 2; scores[["Westchester"]] <- scores[["Westchester"]] + 2; scores },
+                     low    = { scores[["Westchester"]] <- scores[["Westchester"]] + 3; scores[["Nassau County"]] <- scores[["Nassau County"]] + 2; scores[["New York City"]] <- scores[["New York City"]] + 1; scores },
+                     scores
+    )
+    
+    # Transit (0-4 pts)
+    scores <- switch(tra,
+                     high   = { scores[["New York City"]] <- scores[["New York City"]] + 4; scores[["Westchester"]] <- scores[["Westchester"]] + 2; scores[["Nassau County"]] <- scores[["Nassau County"]] + 1; scores },
+                     medium = { scores[["New York City"]] <- scores[["New York City"]] + 3; scores[["Westchester"]] <- scores[["Westchester"]] + 3; scores[["Nassau County"]] <- scores[["Nassau County"]] + 2; scores },
+                     low    = { scores[["Nassau County"]] <- scores[["Nassau County"]] + 3; scores[["Westchester"]] <- scores[["Westchester"]] + 3; scores[["New York City"]] <- scores[["New York City"]] + 1; scores },
+                     scores
+    )
+    
+    tibble(Region.Group = names(scores), lifestyle_score = unlist(scores))
+  })
+  
+  # --- Composite scoring (market + lifestyle) ---
   best_region_scored <- reactive({
     max_price <- aff_calc()$max_price
     prices    <- region_prices()
+    bonus     <- if (profile_complete()) lifestyle_bonus() else
+      tibble(Region.Group = c("Nassau County","New York City","Westchester"), lifestyle_score = c(0,0,0))
     
-    # Score ALL regions (even unaffordable ones get scored for the chart)
-    scored <- prices %>%
+    prices %>%
+      left_join(bonus, by = "Region.Group") %>%
       mutate(
-        is_affordable = price <= max_price,
+        lifestyle_score = replace_na(lifestyle_score, 0),
+        is_affordable   = price <= max_price,
+        budget_ratio    = price / max_price,
         
-        # 1. Budget Fit Score (0-30 pts)
-        #    Rewards regions that USE your budget well (85-100% of max)
-        #    instead of always picking the cheapest
-        budget_ratio   = price / max_price,
         headroom_score = case_when(
-          !is_affordable                          ~ 0,
-          budget_ratio >= 0.85 & budget_ratio <= 1.0 ~ 30,  # Sweet spot
-          budget_ratio >= 0.70 & budget_ratio < 0.85 ~ 22,  # Good
-          budget_ratio >= 0.50 & budget_ratio < 0.70 ~ 14,  # Lots of room
-          TRUE ~ 8                                            # Very cheap vs budget
+          !is_affordable                              ~ 0,
+          budget_ratio >= 0.85 & budget_ratio <= 1.0 ~ 30,
+          budget_ratio >= 0.70 & budget_ratio <  0.85 ~ 22,
+          budget_ratio >= 0.50 & budget_ratio <  0.70 ~ 14,
+          TRUE                                        ~ 8
         ),
         
-        # 2. Market Stability Score (0-25 pts)
-        #    Prefers moderate/stable YoY growth; penalizes overheating
-        momentum_score = case_when(
-          yoy_change >= -2 & yoy_change <= 3   ~ 25,  # Stable
-          yoy_change > 3  & yoy_change <= 6    ~ 20,  # Moderate growth
-          yoy_change > 6  & yoy_change <= 10   ~ 12,  # Hot
-          yoy_change > 10                       ~ 5,   # Overheating
-          yoy_change < -2 & yoy_change >= -5   ~ 18,  # Slight dip = opportunity
-          TRUE ~ 8                                      # Big decline
-        ),
+        momentum_rank  = rank(abs(yoy_change - 2), ties.method = "min"),
+        momentum_score = case_when(momentum_rank == 1 ~ 25, momentum_rank == 2 ~ 17, TRUE ~ 10),
         
-        # 3. Buyer Competitiveness Score (0-25 pts)
-        #    More days on market + sale-to-list <= 100% = better for buyers
-        compete_score = case_when(
-          days_on_market >= 60 & sale_to_list <= 98 ~ 25,
-          days_on_market >= 40 & sale_to_list <= 100 ~ 20,
-          days_on_market >= 25 & sale_to_list <= 102 ~ 14,
-          days_on_market >= 15 & sale_to_list <= 104 ~ 8,
-          TRUE ~ 4
-        ),
+        compete_raw   = days_on_market - (sale_to_list * 10),
+        compete_rank  = rank(-compete_raw, ties.method = "min"),
+        compete_score = case_when(compete_rank == 1 ~ 25, compete_rank == 2 ~ 17, TRUE ~ 10),
         
-        # 4. Inventory Health Score (0-20 pts)
-        #    Growing inventory = more options for buyers
-        inventory_score = case_when(
-          inventory_mom > 5   ~ 20,
-          inventory_mom > 2   ~ 16,
-          inventory_mom > 0   ~ 12,
-          inventory_mom > -3  ~ 8,
-          TRUE ~ 4
-        ),
+        inventory_rank  = rank(-inventory_mom, ties.method = "min"),
+        inventory_score = case_when(inventory_rank == 1 ~ 20, inventory_rank == 2 ~ 14, TRUE ~ 8),
         
-        # Total composite score (affordable regions only get full score)
-        total_score = ifelse(is_affordable,
-                             headroom_score + momentum_score + compete_score + inventory_score,
-                             momentum_score + compete_score + inventory_score)  # partial score for chart
+        market_score = ifelse(is_affordable,
+                              headroom_score + momentum_score + compete_score + inventory_score,
+                              momentum_score + compete_score + inventory_score),
+        total_score  = market_score + lifestyle_score
       ) %>%
       arrange(desc(is_affordable), desc(total_score))
-    
-    scored
   })
   
-  # --- Helper: generate human-readable reason for recommendation ---
   score_reason <- function(row) {
     reasons <- c()
-    if (row$headroom_score >= 22) reasons <- c(reasons, "Great use of your budget")
-    else if (row$headroom_score >= 14) reasons <- c(reasons, "Comfortable budget fit")
-    else if (row$headroom_score > 0)   reasons <- c(reasons, "Well below your budget")
-    
-    if (row$momentum_score >= 20) reasons <- c(reasons, "Stable price trends")
-    else if (row$momentum_score <= 12) reasons <- c(reasons, "Rapidly rising prices")
-    
-    if (row$compete_score >= 20)  reasons <- c(reasons, "Buyer-friendly market")
-    else if (row$compete_score <= 8) reasons <- c(reasons, "Competitive market")
-    
-    if (row$inventory_score >= 16) reasons <- c(reasons, "Growing inventory")
-    else if (row$inventory_score <= 8) reasons <- c(reasons, "Tight inventory")
-    
-    if (length(reasons) == 0) reasons <- c("Balanced across all factors")
-    paste(reasons, collapse = " · ")
+    if (!is.null(row$headroom_score)) {
+      if (row$headroom_score >= 22)      reasons <- c(reasons, "Great use of your budget")
+      else if (row$headroom_score >= 14) reasons <- c(reasons, "Comfortable budget fit")
+      else if (row$headroom_score > 0)   reasons <- c(reasons, "Well below your budget")
+    }
+    if (!is.null(row$momentum_score)) {
+      if (row$momentum_score >= 20)      reasons <- c(reasons, "Stable price trends")
+      else if (row$momentum_score <= 12) reasons <- c(reasons, "Rapidly rising prices")
+    }
+    if (!is.null(row$compete_score)) {
+      if (row$compete_score >= 20)       reasons <- c(reasons, "Buyer-friendly market")
+      else if (row$compete_score <= 10)  reasons <- c(reasons, "Competitive market")
+    }
+    if (!is.null(row$inventory_score)) {
+      if (row$inventory_score >= 14)     reasons <- c(reasons, "Growing inventory")
+      else if (row$inventory_score <= 8) reasons <- c(reasons, "Tight inventory")
+    }
+    if (!is.null(row$lifestyle_score) && row$lifestyle_score >= 20) reasons <- c(reasons, "Strong lifestyle match")
+    else if (!is.null(row$lifestyle_score) && row$lifestyle_score >= 14) reasons <- c(reasons, "Good lifestyle fit")
+    if (length(reasons) == 0) reasons <- "Balanced across all factors"
+    paste(reasons, collapse = " \u00b7 ")
   }
   
   # --- Best Region Recommendation Card ---
   output$aff_best_region <- renderUI({
+    req(profile_complete())
     max_price <- aff_calc()$max_price
-    prices    <- region_prices()
     scored    <- best_region_scored()
     
     region_desc <- list(
-      "Nassau County" = "Nassau County offers suburban communities with good schools and easy access to NYC via commuter rail.",
-      "New York City" = "New York City offers urban living with world-class amenities, transit, and diverse neighborhoods.",
-      "Westchester"   = "Westchester offers a mix of suburban towns and villages with a quieter lifestyle north of the city."
+      "Nassau County" = "Nassau County offers suburban communities with top-rated schools, quiet neighborhoods, and easy access to NYC via commuter rail \u2014 a natural fit for families.",
+      "New York City" = "New York City offers unmatched urban living with world-class transit, dining, nightlife, and career opportunities across diverse neighborhoods.",
+      "Westchester"   = "Westchester blends suburban charm with metro access via Metro-North \u2014 ideal for those wanting space and quiet without leaving the region."
     )
     
     affordable <- scored %>% filter(is_affordable)
     
     if (nrow(affordable) == 0) {
-      # No affordable regions — show closest option
       closest <- scored %>% arrange(price) %>% slice(1)
       gap     <- closest$price - max_price
       div(style="background-color:#B71C1C; color:white; border-radius:10px; padding:20px; margin-bottom:10px;",
-          tags$strong(style="font-size:16px;", paste0(
-            "\u26A0 No regions are currently within your budget")),
+          tags$strong(style="font-size:16px;", "\u26A0 No regions are currently within your budget"),
           tags$p(style="margin:8px 0 0;",
-                 paste0("Your closest option is ", closest$Region.Group, " — you are $",
+                 paste0("Your closest option is ", closest$Region.Group, " \u2014 you are $",
                         formatC(round(gap/1000,0), format="d", big.mark=","),
                         "K short of the median price. Consider increasing your down payment or income.")))
     } else {
@@ -571,11 +706,12 @@ function(input, output) {
       why_text  <- score_reason(best)
       
       score_detail <- paste0(
-        "Score: ", round(best$total_score), "/100 — ",
-        "Budget Fit (", best$headroom_score, "/30) · ",
-        "Stability (", best$momentum_score, "/25) · ",
-        "Competitiveness (", best$compete_score, "/25) · ",
-        "Inventory (", best$inventory_score, "/20)"
+        "Total Score: ", round(best$total_score), "/130 \u2014 ",
+        "Budget (", best$headroom_score, "/30) \u00b7 ",
+        "Stability (", best$momentum_score, "/25) \u00b7 ",
+        "Competitiveness (", best$compete_score, "/25) \u00b7 ",
+        "Inventory (", best$inventory_score, "/20) \u00b7 ",
+        "Lifestyle (", best$lifestyle_score, "/30)"
       )
       
       runners <- affordable %>% slice(-1)
@@ -583,40 +719,32 @@ function(input, output) {
       div(
         style = "border-radius:10px; overflow:hidden; border:2px solid #1565C0; margin-bottom:10px;",
         div(style="background-color:#1565C0; color:white; padding:14px 20px;",
-            tags$strong(style="font-size:18px;", paste0(
-              "\u2B50 Best Match: ", best_rg)),
+            tags$strong(style="font-size:18px;", paste0("\u2B50 Best Match: ", best_rg)),
             tags$span(style="font-size:13px; opacity:0.85; margin-left:12px;",
-                      paste0("Median: $", formatC(round(best$price/1000,0), format="d", big.mark=","), "K — within your budget"))
+                      paste0("Median: $", formatC(round(best$price/1000,0), format="d", big.mark=","), "K \u2014 within your budget"))
         ),
         div(style="display:flex; background:white;",
-            tags$img(src=best_img,
-                     style="width:280px; height:180px; object-fit:cover; flex-shrink:0;",
-                     onerror="this.style.display='none'"),
+            tags$img(src=best_img, style="width:280px; height:180px; object-fit:cover; flex-shrink:0;", onerror="this.style.display='none'"),
             div(style="padding:16px; flex:1;",
                 tags$p(style="margin:0 0 8px; color:#333; font-size:14px;", best_desc),
-                tags$p(style="margin:0 0 6px; color:#1565C0; font-size:13px; font-weight:bold;",
-                       paste0("Why this region: ", why_text)),
-                tags$p(style="margin:0 0 6px; color:#555; font-size:12px; font-style:italic;",
-                       score_detail),
+                tags$p(style="margin:0 0 6px; color:#1565C0; font-size:13px; font-weight:bold;", paste0("Why this region: ", why_text)),
+                tags$p(style="margin:0 0 6px; color:#555; font-size:12px; font-style:italic;", score_detail),
                 tags$p(style="margin:0; color:#555; font-size:13px;",
-                       paste0("At the current median price, you'd be looking at a ", best_tier, " in this area. ",
-                              "Your budget of $", formatC(round(max_price/1000,0), format="d", big.mark=","),
-                              "K gives you ", ifelse(max_price >= best$price,
-                                                     paste0("$", formatC(round((max_price - best$price)/1000,0), format="d", big.mark=","), "K of headroom."),
-                                                     "limited options at the median price.")))
+                       paste0("At the current median price, you'd be looking at a ", best_tier, " in this area. Your budget of $",
+                              formatC(round(max_price/1000,0), format="d", big.mark=","), "K gives you ",
+                              ifelse(max_price >= best$price,
+                                     paste0("$", formatC(round((max_price-best$price)/1000,0), format="d", big.mark=","), "K of headroom."),
+                                     "limited options at the median price.")))
             )
         ),
-        # Runner-up regions
         if (nrow(runners) > 0) {
           div(style="background:#f8f9fa; padding:12px 20px; border-top:1px solid #ddd;",
               tags$strong(style="font-size:13px; color:#333;", "Also affordable:"),
               lapply(seq_len(nrow(runners)), function(i) {
                 r <- runners[i,]
                 tags$div(style="font-size:12px; color:#555; margin-top:4px; margin-left:12px;",
-                         paste0(r$Region.Group,
-                                " — Score: ", round(r$total_score), "/100",
-                                " · Median: $", formatC(round(r$price/1000,0), format="d", big.mark=","), "K",
-                                " · ", score_reason(r)))
+                         paste0(r$Region.Group, " \u2014 Score: ", round(r$total_score), "/130 \u00b7 Median: $",
+                                formatC(round(r$price/1000,0), format="d", big.mark=","), "K \u00b7 ", score_reason(r)))
               })
           )
         }
@@ -628,27 +756,27 @@ function(input, output) {
   output$aff_score_plot <- renderPlot({
     scored <- best_region_scored()
     if (is.null(scored) || nrow(scored) == 0) {
-      return(ggplot() + annotate("text", x=0.5, y=0.5, label="Adjust inputs to see scores", size=6, color="gray50") + theme_void())
+      return(ggplot() + annotate("text", x=0.5, y=0.5, label="Complete your profile to see scores", size=6, color="gray50") + theme_void())
     }
     
     plot_data <- scored %>%
-      select(Region.Group, is_affordable, headroom_score, momentum_score, compete_score, inventory_score) %>%
-      pivot_longer(cols = c(headroom_score, momentum_score, compete_score, inventory_score),
+      select(Region.Group, is_affordable, headroom_score, momentum_score, compete_score, inventory_score, lifestyle_score) %>%
+      pivot_longer(cols = c(headroom_score, momentum_score, compete_score, inventory_score, lifestyle_score),
                    names_to = "category", values_to = "score") %>%
       mutate(
         category = case_when(
           category == "headroom_score"  ~ "Budget Fit (30)",
           category == "momentum_score"  ~ "Stability (25)",
           category == "compete_score"   ~ "Competitiveness (25)",
-          category == "inventory_score" ~ "Inventory (20)"
+          category == "inventory_score" ~ "Inventory (20)",
+          category == "lifestyle_score" ~ "Lifestyle Match (30)"
         ),
-        category = factor(category, levels = c("Inventory (20)", "Competitiveness (25)",
-                                               "Stability (25)", "Budget Fit (30)")),
+        category = factor(category, levels = c("Lifestyle Match (30)","Inventory (20)","Competitiveness (25)","Stability (25)","Budget Fit (30)")),
         label = ifelse(is_affordable, Region.Group, paste0(Region.Group, " *"))
       )
     
-    score_colors <- c("Budget Fit (30)" = "#1565C0", "Stability (25)" = "#2E6699",
-                      "Competitiveness (25)" = "#4F86BA", "Inventory (20)" = "#A8C8E8")
+    score_colors <- c("Budget Fit (30)"="#1565C0","Stability (25)"="#2E6699","Competitiveness (25)"="#4F86BA",
+                      "Inventory (20)"="#A8C8E8","Lifestyle Match (30)"="#E8A020")
     
     totals <- scored %>%
       mutate(label = ifelse(is_affordable, Region.Group, paste0(Region.Group, " *"))) %>%
@@ -656,17 +784,15 @@ function(input, output) {
     
     ggplot(plot_data, aes(x = reorder(label, -score, FUN = sum), y = score, fill = category)) +
       geom_col(width = 0.6) +
-      geom_text(data = totals, aes(x = label, y = total_score, label = paste0(round(total_score), "/100"), fill = NULL),
+      geom_text(data = totals, aes(x = label, y = total_score, label = paste0(round(total_score), "/130"), fill = NULL),
                 vjust = -0.5, size = 4, fontface = "bold", color = "#333") +
       scale_fill_manual(values = score_colors) +
-      scale_y_continuous(limits = c(0, 110), expand = expansion(mult = c(0, 0.05))) +
-      labs(title = "Region Scores — Why We Recommend What We Do",
-           subtitle = "Higher score = better fit for you as a buyer (* = not affordable)",
+      scale_y_continuous(limits = c(0, 145), expand = expansion(mult = c(0, 0.05))) +
+      labs(title = "Region Scores \u2014 Market Fit + Your Lifestyle Profile",
+           subtitle = "Higher score = better overall fit (* = not affordable at current budget)",
            x = NULL, y = "Score", fill = "Category") +
       theme_minimal(base_size = 13) +
-      theme(plot.title = element_text(face = "bold"),
-            legend.position = "bottom",
-            panel.grid.major.x = element_blank())
+      theme(plot.title = element_text(face = "bold"), legend.position = "bottom", panel.grid.major.x = element_blank())
   })
   
   # --- Per-Region Affordability Cards ---
@@ -686,33 +812,25 @@ function(input, output) {
       pct_diff    <- round(abs(max_price - region_price) / region_price * 100, 1)
       bg_color    <- if (affordable) "#1B5E20" else "#B71C1C"
       status_icon <- if (affordable) "\u2713" else "\u2717"
-      status_text <- if (affordable)
-        paste0("Within budget by ", diff_fmt, " (", pct_diff, "% below median)")
-      else
-        paste0("Over budget by ", diff_fmt, " (", pct_diff, "% above median)")
+      status_text <- if (affordable) paste0("Within budget by ", diff_fmt, " (", pct_diff, "% below median)")
+      else            paste0("Over budget by ",   diff_fmt, " (", pct_diff, "% above median)")
       
-      # Pull score for this region
       region_score <- scored %>% filter(Region.Group == region_name)
-      score_text <- if (nrow(region_score) > 0) paste0("Score: ", round(region_score$total_score[1]), "/100") else ""
-      
-      img_url  <- home_image(region_price, region_name)
-      tier_lbl <- home_tier_label(region_price)
+      score_text   <- if (nrow(region_score) > 0)
+        paste0("Score: ", round(region_score$total_score[1]), "/130 (Lifestyle: ", region_score$lifestyle_score[1], "/30)")
+      else ""
       
       div(
         style = paste0("border-radius:10px; overflow:hidden; border:2px solid ", bg_color, ";"),
-        tags$img(src=img_url,
-                 style="width:100%; height:160px; object-fit:cover; display:block;",
-                 onerror="this.style.display='none'"),
+        tags$img(src=home_image(region_price, region_name), style="width:100%; height:160px; object-fit:cover; display:block;", onerror="this.style.display='none'"),
         div(style=paste0("background-color:", bg_color, "; color:white; padding:14px; text-align:center;"),
             tags$strong(style="font-size:15px;", display_name),
-            tags$div(style="font-size:22px; font-weight:bold; margin:6px 0;",
-                     paste0(status_icon, " ", if(affordable) "Affordable" else "Not Affordable")),
+            tags$div(style="font-size:22px; font-weight:bold; margin:6px 0;", paste0(status_icon, " ", if(affordable) "Affordable" else "Not Affordable")),
             tags$div(style="font-size:12px; opacity:0.9; margin:3px 0;", paste0("Median: ", price_fmt)),
             tags$div(style="font-size:12px; opacity:0.9; margin:3px 0;", paste0("Your Max: ", max_fmt)),
             tags$div(style="font-size:11px; opacity:0.8; margin-top:6px;", status_text),
             if (nchar(score_text) > 0) tags$div(style="font-size:11px; opacity:0.85; margin-top:4px; font-weight:bold;", score_text),
-            tags$div(style="font-size:11px; opacity:0.75; margin-top:4px; font-style:italic;",
-                     paste0("Typical home at median: ", tier_lbl))
+            tags$div(style="font-size:11px; opacity:0.75; margin-top:4px; font-style:italic;", paste0("Typical home at median: ", home_tier_label(region_price)))
         )
       )
     })
@@ -725,20 +843,17 @@ function(input, output) {
   # --- Historical Affordability Plot ---
   output$aff_history_plot <- renderPlot({
     req(aff_calc()$max_price > 0)
-    calc      <- aff_calc()
-    max_price <- calc$max_price
+    max_price <- aff_calc()$max_price
     df <- clean_df() %>%
       filter(!is.na(Median.Sale.Price)) %>%
       group_by(date, Region.Group) %>%
       summarise(Median.Sale.Price = mean(Median.Sale.Price, na.rm=TRUE), .groups="drop") %>%
       filter(Region.Group != "Other")
     aff_colors <- c("Nassau County"="#0A1929","New York City"="#1565C0","Westchester"="#A8C8E8")
-    date_min <- min(df$date)
-    date_max <- max(df$date)
-    y_max    <- max(max(df$Median.Sale.Price, na.rm=TRUE), max_price) * 1.1
+    date_min <- min(df$date); date_max <- max(df$date)
+    y_max <- max(max(df$Median.Sale.Price, na.rm=TRUE), max_price) * 1.1
     ggplot(df, aes(x=date, y=Median.Sale.Price, color=Region.Group)) +
-      annotate("rect", xmin=date_min, xmax=date_max, ymin=0, ymax=max_price,
-               fill="#1B5E20", alpha=0.10) +
+      annotate("rect", xmin=date_min, xmax=date_max, ymin=0, ymax=max_price, fill="#1B5E20", alpha=0.10) +
       geom_hline(yintercept=max_price, linetype="dashed", color="#1B5E20", linewidth=1) +
       annotate("text", x=date_min+30, y=max_price*1.04,
                label=paste0("Your Max: $", formatC(round(max_price/1000,0), format="d", big.mark=","), "K"),
@@ -749,8 +864,7 @@ function(input, output) {
       labs(title="Your Affordability Threshold vs. Regional Median Prices",
            subtitle="Green shaded area = homes within your budget",
            x="Date", y="Price", color="Region") +
-      theme_minimal(base_size=13) +
-      theme(plot.title=element_text(face="bold"), legend.position="bottom")
+      theme_minimal(base_size=13) + theme(plot.title=element_text(face="bold"), legend.position="bottom")
   })
   
   # --- Sensitivity Plot ---
@@ -762,11 +876,9 @@ function(input, output) {
     income  <- input$aff_income
     max_monthly  <- (income / 12) * 0.28
     max_mortgage <- max(max_monthly - tax_ins, 0)
-    max_loan     <- if (rate == 0) max_mortgage * term else
-      max_mortgage * (1 - (1 + rate)^(-term)) / rate
+    max_loan     <- if (rate == 0) max_mortgage * term else max_mortgage * (1 - (1 + rate)^(-term)) / rate
     down_seq   <- seq(0, 500000, by=10000)
-    max_prices <- down_seq + max_loan
-    sens_df    <- data.frame(down=down_seq, max_price=max_prices)
+    sens_df    <- data.frame(down=down_seq, max_price=down_seq + max_loan)
     prices     <- region_prices()
     aff_colors <- c("Nassau County"="#0A1929","New York City"="#1565C0","Westchester"="#A8C8E8")
     p <- ggplot(sens_df, aes(x=down, y=max_price)) +
@@ -777,8 +889,7 @@ function(input, output) {
                hjust=-0.1, size=3.5, color="gray40")
     for (i in seq_len(nrow(prices))) {
       rg <- prices$Region.Group[i]; price <- prices$price[i]; col <- aff_colors[rg]
-      p <- p +
-        geom_hline(yintercept=price, linetype="dotted", color=col, linewidth=0.8) +
+      p <- p + geom_hline(yintercept=price, linetype="dotted", color=col, linewidth=0.8) +
         annotate("text", x=max(down_seq)*0.98, y=price*1.02, label=rg, hjust=1, size=3, color=col)
     }
     p + scale_x_continuous(labels=scales::dollar_format(scale=0.001, suffix="K")) +
