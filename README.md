@@ -15,7 +15,7 @@ Perry Nuckols
   -Explore this tab to determine market trends for Median Price, Days on the Market
   inventory, and overall market trends
   
-###Region Overview:
+#### Region Overview:
   -Similar to the market tab, users can determine different market trends based on more 
   data specific to the region. 
   
@@ -34,7 +34,7 @@ Perry Nuckols
   -Shows users a predicted housing price for the different regions based on a liner 
   predictive model. 
   
-# Acknoledgements and Citations:
+### Acknoledgements and Citations:
 #### Data: 
 Redfin(2025)- https://www.redfin.com/news/data-center/
 
