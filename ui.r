@@ -215,7 +215,7 @@ ui <- page_navbar(
                              selected = "line"
                 ),
                 hr(),
-                helpText("Inventory has no absolute value — use MoM or YoY for inventory trends."),
+                helpText("Inventory has no absolute value — use Month-over-Month or Year-over-Year for inventory trends."),
                 helpText("Summary statistics reflect the most recent month in the selected range.")
               ),
               layout_columns(
