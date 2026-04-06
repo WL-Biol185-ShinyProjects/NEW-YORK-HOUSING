@@ -6,29 +6,14 @@ visualize the data through a interactive heat map, use our predictive model to s
 are heading, and also choose user specific preferences to see which location is best for the 
 individual. 
 
-<<<<<<< HEAD
-##Members 
-=======
-### Members 
->>>>>>> 95b19a61fa67a27f9852055db8741a25c7979809
+
+## Members
+
 Ryan McGovern, 
 Perry Nuckols 
 
 ### Tab Overview 
-<<<<<<< HEAD
 
-##Market Overview
-  -Explore this tab to determine market trends for Median Price, Days on the Market
-  inventory, and overall market trends
-
-##Region Overview
-  -Similar to the market tab, users can determine different market trends based on more 
-  data specific to the region. 
-##Heat Map
-  -Users have access to an interactive heat map that allows users to visualize 
-  the market data in map form. 
-##Affordability Calculator
-=======
 #### Market Overview:
   -Explore this tab to determine market trends for Median Price, Days on the Market
   inventory, and overall market trends
@@ -42,18 +27,13 @@ Perry Nuckols
   the market data in map form. 
   
 #### Affordability Calculator:
->>>>>>> 95b19a61fa67a27f9852055db8741a25c7979809
   -User are able to input their specific preferences in areas such as life stage, 
   environment, school district ratings, leisure preferences, and public transportation. 
   It also allows users to input annual household income, down payment, interest rates, 
   monthly insurance and tax, and loan term. It then takes all of that data and gives a 
   suggestion as well as ratings for the different locations. 
-<<<<<<< HEAD
-##Price Prediction Model 
-=======
   
 #### Price Prediction Model: 
->>>>>>> 95b19a61fa67a27f9852055db8741a25c7979809
   -Shows users a predicted housing price for the different regions based on a liner 
   predictive model. 
   
