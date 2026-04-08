@@ -1,7 +1,7 @@
 # NEW-YORK-HOUSING
 A interactive Shiny app that dives into the housing market in NYC Metro Areas: Westchester County, Nassua County, 
 and NYC. This app was designed and built using data from Redfin from the years 2015-2025. The app's
-users are able to idenitfy overall market trends, regional trnds, Year-over-Year/Month-over-Month trends, 
+users are able to identify overall market trends, regional trnds, Year-over-Year/Month-over-Month trends, 
 visualize the data through a interactive heat map, use our predictive model to see where housing prices
 are heading, and also choose user specific preferences to see which location is best for the 
 individual. 
